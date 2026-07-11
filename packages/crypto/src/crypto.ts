@@ -9,7 +9,21 @@
  *     --HKDF("enc")-->     encryptionKey  (never leaves the client)
  */
 
-import type { VaultItemSecret } from "@app/shared";
+/**
+ * The secret fields of a vault entry — the input to encryptVaultItem and
+ * the output of decryptVaultItem. Exists only in memory on the client;
+ * never sent to or stored on the server in this form.
+ *
+ * Owned by this package (not a BE/FE DTO): callers map their own view
+ * models to/from this shape.
+ */
+export interface VaultItemSecret {
+  siteName: string;
+  siteUrl?: string;
+  username: string;
+  password: string;
+  notes?: string;
+}
 
 /** Argon2id parameters */
 export interface KdfParams {
