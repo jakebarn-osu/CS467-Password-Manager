@@ -2,16 +2,18 @@ import { useState } from 'react';
 import './App.css';
 import { LoginPage } from './pages/LoginPage';
 import {
-  fetchPasswords,
-  fetchUserSalt,
-  login,
-  registerNewEmail,
-  setNewUserAuthKey,
+  // fetchPasswords,
+  // fetchUserSalt,
+  // login,
+  // registerNewEmail,
+  // setNewUserAuthKey,
   type EncryptedPassword,
+  type ServerResponse,
 } from './serverAPI';
 import { PasswordsPage, type Password } from './pages/PasswordsPage';
 import { RegisterPage } from './pages/RegisterPage';
 
+// Stubbed encryption library
 // TODO: get real method when its ready
 const testGenerateAuthKey = (_masterPassword: string): Promise<string> => {
   return Promise.resolve('TEST_AUTH_KEY');
@@ -30,6 +32,53 @@ const testDecryptPasswords = (_pws: EncryptedPassword[]): Promise<Password[]> =>
       password: '54321',
     },
   ]);
+};
+
+// Stubbed server API
+const testFetchPasswords = (): Promise<ServerResponse<EncryptedPassword[]>> => {
+  return Promise.resolve({
+    data: [
+      {
+        itemName: 'ENC-PW1',
+        username: 'ENC-jake',
+        password: 'ENC-12345',
+      },
+      {
+        itemName: 'ENC-PW2',
+        username: 'ENC-jake',
+        password: 'ENC-54321',
+      },
+    ],
+    publicErrorMessage: '',
+  });
+};
+
+const testFetchUserSalt = (): Promise<ServerResponse<string>> => {
+  return Promise.resolve({
+    data: 'USER_SALT',
+    publicErrorMessage: '',
+  });
+};
+
+const testLogin = (): Promise<ServerResponse<boolean>> => {
+  return Promise.resolve({
+    data: true,
+    publicErrorMessage: '',
+  });
+};
+
+const testRegisterNewEmail = (): Promise<ServerResponse<string>> => {
+  return Promise.resolve({
+    data: 'TEST_SALT',
+    publicErrorMessage: '',
+  });
+};
+
+const testSetNewUserAuthKey = (_email: string, _ak: string): Promise<ServerResponse<boolean>> => {
+  return Promise.resolve({
+    data: true,
+    publicErrorMessage: '',
+  });
 };
 
 function App() {
@@ -52,9 +101,9 @@ function Routes() {
     case '/login':
       return (
         <LoginPage
-          fetchUserSalt={fetchUserSalt}
+          fetchUserSalt={testFetchUserSalt}
           generateAuthKey={testGenerateAuthKey}
-          login={login}
+          login={testLogin}
           redirect={redirect}
         />
       );
@@ -62,14 +111,17 @@ function Routes() {
       return (
         <RegisterPage
           generateAuthKey={testGenerateAuthKey}
-          registerNewEmail={registerNewEmail}
-          setNewUserAuthKey={setNewUserAuthKey}
+          registerNewEmail={testRegisterNewEmail}
+          setNewUserAuthKey={testSetNewUserAuthKey}
           redirect={redirect}
         />
       );
     case '/passwords':
       return (
-        <PasswordsPage fetchPasswords={fetchPasswords} decryptPasswords={testDecryptPasswords} />
+        <PasswordsPage
+          fetchPasswords={testFetchPasswords}
+          decryptPasswords={testDecryptPasswords}
+        />
       );
     default:
       return <PageNotFound />;
