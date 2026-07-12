@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import './App.css';
 import { LoginPage } from './pages/LoginPage';
-import { fetchUserSalt, login } from './serverAPI';
+import { fetchUserSalt, login, registerNewEmail, setNewUserAuthKey } from './serverAPI';
 import { PasswordsPage } from './pages/PasswordsPage';
+import { RegisterPage } from './pages/RegisterPage';
 
 // TODO: get real method when its ready
 const testGenerateAuthKey = (_masterPassword: string): Promise<string> => {
@@ -32,6 +33,15 @@ function Routes() {
           fetchUserSalt={fetchUserSalt}
           generateAuthKey={testGenerateAuthKey}
           login={login}
+          redirect={redirect}
+        />
+      );
+    case '/register':
+      return (
+        <RegisterPage
+          generateAuthKey={testGenerateAuthKey}
+          registerNewEmail={registerNewEmail}
+          setNewUserAuthKey={setNewUserAuthKey}
           redirect={redirect}
         />
       );
