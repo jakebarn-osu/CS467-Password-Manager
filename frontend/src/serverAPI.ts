@@ -41,6 +41,93 @@ export async function fetchUserSalt(email: string): Promise<ServerResponse<UserS
   }
 }
 
+export async function registerNewEmail(email: string): Promise<ServerResponse<UserSalt>> {
+  const url = '/register';
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    if (!response.ok) {
+      console.error(response);
+      return {
+        data: '',
+        publicErrorMessage: 'Error registering.',
+      };
+    }
+
+    const responseBody = await response.json();
+    if (!responseBody.salt) {
+      console.error(response);
+      return {
+        data: '',
+        publicErrorMessage: 'Error registering.',
+      };
+    }
+
+    return {
+      data: responseBody.salt,
+      publicErrorMessage: '',
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      data: '',
+      publicErrorMessage: 'Error registering.',
+    };
+  }
+}
+
+export async function setNewUserAuthKey(
+  email: string,
+  authKey: string,
+): Promise<ServerResponse<boolean>> {
+  const url = '/setAuthKey';
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, authKey }),
+    });
+
+    if (!response.ok) {
+      console.error(response);
+      return {
+        data: false,
+        publicErrorMessage: 'Error registering.',
+      };
+    }
+
+    const responseBody = await response.json();
+    if (!responseBody.success) {
+      console.error(response);
+      return {
+        data: false,
+        publicErrorMessage: 'Error registering.',
+      };
+    }
+
+    return {
+      data: responseBody.salt,
+      publicErrorMessage: '',
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      data: false,
+      publicErrorMessage: 'Error registering.',
+    };
+  }
+}
+
 export async function login(authKey: string): Promise<ServerResponse<boolean>> {
   const url = '/login';
 
