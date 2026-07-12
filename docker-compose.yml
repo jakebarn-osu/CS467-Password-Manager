@@ -22,6 +22,9 @@ services:
       dockerfile: api/Dockerfile
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@db:5432/${POSTGRES_DB:-app}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me}
+      SALT_PEPPER: ${SALT_PEPPER:-dev-only-insecure-pepper-change-me}
+      JWT_EXPIRES_IN_SECONDS: ${JWT_EXPIRES_IN_SECONDS:-900}
     ports:
       - "${API_PORT:-5001}:5000"
     volumes:
