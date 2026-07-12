@@ -160,3 +160,45 @@ export async function login(authKey: string): Promise<ServerResponse<boolean>> {
     };
   }
 }
+
+export type EncryptedPassword = {
+  itemName: string;
+  username: string;
+  password: string;
+};
+
+export async function fetchPasswords(): Promise<ServerResponse<EncryptedPassword[] | null>> {
+  const url = `/passwords`;
+
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      console.error(response);
+      return {
+        data: null,
+        publicErrorMessage: 'Error fetching passwords.',
+      };
+    }
+
+    const responseBody = await response.json();
+    if (!responseBody.passwords) {
+      console.error(response);
+      return {
+        data: null,
+        publicErrorMessage: 'Error fetching passwords.',
+      };
+    }
+
+    return {
+      data: responseBody.passwords,
+      publicErrorMessage: '',
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      data: null,
+      publicErrorMessage: 'Error fetching passwords.',
+    };
+  }
+}
