@@ -1,35 +1,53 @@
-import { useEffect, useState } from 'react'
-import type { User } from '@app/shared'
-import './App.css'
+import { useState } from 'react';
+import './App.css';
+import { LoginPage } from './pages/LoginPage';
+import { fetchUserSalt, login } from './serverAPI';
+import { PasswordsPage } from './pages/PasswordsPage';
+
+// TODO: get real method when its ready
+const testGenerateAuthKey = (_masterPassword: string): Promise<string> => {
+  return Promise.resolve('TEST_AUTH_KEY');
+};
 
 function App() {
-  const [users, setUsers] = useState<User[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch('/api/users')
-      .then((res) => {
-        if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-        return res.json() as Promise<User[]>
-      })
-      .then(setUsers)
-      .catch((err: Error) => setError(err.message))
-  }, [])
-
   return (
     <section id="center">
-      <h1>Users</h1>
-      {error && <p role="alert">Error: {error}</p>}
-      {!error && !users && <p>Loading...</p>}
-      {users && (
-        <ul>
-          {users.map((user) => (
-            <li key={user.id}>{user.name}</li>
-          ))}
-        </ul>
-      )}
+      <Routes />
     </section>
-  )
+  );
 }
 
-export default App
+function Routes() {
+  const [path, setPath] = useState(window.location.pathname);
+
+  const redirect = (newPath: string) => {
+    window.location.pathname = newPath;
+    setPath(newPath);
+  };
+
+  switch (path) {
+    case '/login':
+      return (
+        <LoginPage
+          fetchUserSalt={fetchUserSalt}
+          generateAuthKey={testGenerateAuthKey}
+          login={login}
+          redirect={redirect}
+        />
+      );
+    case '/passwords':
+      return <PasswordsPage />;
+    default:
+      return <PageNotFound />;
+  }
+}
+
+function PageNotFound() {
+  return (
+    <div>
+      <h2>Page Not Found</h2>
+    </div>
+  );
+}
+
+export default App;
