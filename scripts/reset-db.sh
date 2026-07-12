@@ -4,5 +4,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 docker compose down
-docker volume rm "$(basename "$(pwd)")_db-data" 2>/dev/null || true
+
+project="${COMPOSE_PROJECT_NAME:-$(basename "$(pwd)" | tr '[:upper:]' '[:lower:]')}"
+docker volume rm "${project}_db-data" 2>/dev/null || true
 echo "Database volume removed. Run ./scripts/start.sh to recreate it."

@@ -1,23 +1,21 @@
 import cors from "cors";
 import express from "express";
-import type { User } from "@app/shared";
-import { pool } from "./db.js";
+import { config } from "./config.js";
+import { authRouter } from "./routes/auth.js";
+import { errorHandler } from "./middleware/error.js";
 
 const app = express();
 app.use(cors());
+app.use(express.json({ limit: "16kb" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-app.get("/api/users", async (_req, res) => {
-  const result = await pool.query<User>(
-    "SELECT id, name, email FROM users ORDER BY id",
-  );
-  res.json(result.rows);
-});
+app.use("/api/v1/auth", authRouter);
 
-const port = 5000;
-app.listen(port, () => {
-  console.log(`api listening on port ${port}`);
+app.use(errorHandler);
+
+app.listen(config.PORT, () => {
+  console.log(`api listening on port ${config.PORT}`);
 });
