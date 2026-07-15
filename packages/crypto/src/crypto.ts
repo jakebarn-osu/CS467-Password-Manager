@@ -155,13 +155,12 @@ export function encodeEncryptedPayload(payload: EncryptedPayload): string {
 
 /** Decodes a base64 payload string back into its binary parts. */
 export function decodeEncryptedPayload(encoded: string): EncryptedPayload {
-  let bytes: Uint8Array<ArrayBuffer>;
-  try {
-    bytes = base64ToBytes(encoded);
-  } catch {
-    // Rethrow the custom error
+  // Check the length and format of the base64 string to be a strict inverse of encodeEncryptedPayload
+  // as atob is lenient (strips whitespace, tolerates missing padding)
+  if (encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
     throw new Error("Payload is not valid base64");
   }
+  const bytes = base64ToBytes(encoded);
   if (bytes.length < 1 + NONCE_LENGTH + MIN_CIPHERTEXT_LENGTH) {
     throw new Error("Payload is too short to be valid");
   }

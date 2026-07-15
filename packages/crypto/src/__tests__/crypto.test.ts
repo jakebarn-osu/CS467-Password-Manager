@@ -79,4 +79,16 @@ describe("encodeEncryptedPayload / decodeEncryptedPayload", () => {
   it("decode wraps malformed base64 in this library's error style", () => {
     expect(() => decodeEncryptedPayload("not base64 !!!")).toThrow(/not valid base64/);
   });
+
+  it("rejects base64 that atob would leniently accept (whitespace / missing padding)", () => {
+    const valid = encodeEncryptedPayload({
+      version: PAYLOAD_VERSION,
+      nonce: generateNonce(),
+      ciphertext: crypto.getRandomValues(new Uint8Array(48)), // 61 bytes -> "==" padding
+    });
+    expect(() => decodeEncryptedPayload(valid.slice(0, 4) + " " + valid.slice(4))).toThrow(
+      /not valid base64/,
+    );
+    expect(() => decodeEncryptedPayload(valid.replace(/=+$/, ""))).toThrow(/not valid base64/);
+  });
 });
