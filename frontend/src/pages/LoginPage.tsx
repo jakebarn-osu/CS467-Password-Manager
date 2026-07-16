@@ -40,7 +40,10 @@ export function LoginPage({
 
     const { data, publicErrorMessage } = await fetchUserSalt(formEmail);
     setFetchUserSaltError(publicErrorMessage);
-    setUserSalt(data!.salt);
+    if (!data) {
+      return;
+    }
+    setUserSalt(data.salt);
   };
 
   const handleGenerateAuthKeyAndLogin = async (
