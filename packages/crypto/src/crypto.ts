@@ -50,12 +50,35 @@ export interface EncryptedPayload {
 
 export const PAYLOAD_VERSION = 1;
 export const NONCE_LENGTH = 12;
+/** GCM appends a 16-byte auth tag, so no valid ciphertext is shorter than this. */
+const MIN_CIPHERTEXT_LENGTH = 16;
 
 /** Error thrown by Phase 1 stub functions. */
 class NotImplementedError extends Error {
   constructor(functionName: string) {
     super(`${functionName} is a Phase 1 stub — implemented in Phase 2`);
   }
+}
+
+// ---- binary <-> string helpers ----
+
+/** Encodes bytes as base64 (for salts, auth keys, and payloads sent as JSON strings). */
+export function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+/** Decodes a base64 string back into bytes. */
+export function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
 /**
@@ -109,13 +132,47 @@ export async function decryptVaultItem(
 }
 
 /** Encodes version || nonce || ciphertext as base64 for storage/transport. */
-export function encodeEncryptedPayload(_payload: EncryptedPayload): string {
-  throw new NotImplementedError("encodeEncryptedPayload");
+export function encodeEncryptedPayload(payload: EncryptedPayload): string {
+  // Mirror decodeEncryptedPayload's checks so encode can never produce a
+  // string that decode rejects (and version can't silently truncate to a byte).
+  if (payload.version !== PAYLOAD_VERSION) {
+    throw new Error(`Unsupported payload version: ${payload.version}`);
+  }
+  if (payload.nonce.length !== NONCE_LENGTH) {
+    throw new Error(`nonce must be ${NONCE_LENGTH} bytes, got ${payload.nonce.length}`);
+  }
+  if (payload.ciphertext.length < MIN_CIPHERTEXT_LENGTH) {
+    throw new Error(
+      `ciphertext must be at least ${MIN_CIPHERTEXT_LENGTH} bytes (GCM tag included), got ${payload.ciphertext.length}`,
+    );
+  }
+  const bytes = new Uint8Array(1 + NONCE_LENGTH + payload.ciphertext.length);
+  bytes[0] = payload.version;
+  bytes.set(payload.nonce, 1);
+  bytes.set(payload.ciphertext, 1 + NONCE_LENGTH);
+  return bytesToBase64(bytes);
 }
 
 /** Decodes a base64 payload string back into its binary parts. */
-export function decodeEncryptedPayload(_encoded: string): EncryptedPayload {
-  throw new NotImplementedError("decodeEncryptedPayload");
+export function decodeEncryptedPayload(encoded: string): EncryptedPayload {
+  // Check the length and format of the base64 string to be a strict inverse of encodeEncryptedPayload
+  // as atob is lenient (strips whitespace, tolerates missing padding)
+  if (encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
+    throw new Error("Payload is not valid base64");
+  }
+  const bytes = base64ToBytes(encoded);
+  if (bytes.length < 1 + NONCE_LENGTH + MIN_CIPHERTEXT_LENGTH) {
+    throw new Error("Payload is too short to be valid");
+  }
+  const version = bytes[0]!;
+  if (version !== PAYLOAD_VERSION) {
+    throw new Error(`Unsupported payload version: ${version}`);
+  }
+  return {
+    version,
+    nonce: bytes.slice(1, 1 + NONCE_LENGTH),
+    ciphertext: bytes.slice(1 + NONCE_LENGTH),
+  };
 }
 
 // ---- Phase 3: password quality helpers ----

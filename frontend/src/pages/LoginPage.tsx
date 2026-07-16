@@ -57,6 +57,7 @@ export function LoginPage({
       const { data: success, publicErrorMessage } = await login(key);
       if (!success) {
         setLoginError(publicErrorMessage);
+        return;
       }
 
       redirect('/passwords');

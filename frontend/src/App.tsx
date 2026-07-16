@@ -1,12 +1,35 @@
 import { useState } from 'react';
 import './App.css';
 import { LoginPage } from './pages/LoginPage';
-import { fetchUserSalt, login } from './serverAPI';
-import { PasswordsPage } from './pages/PasswordsPage';
+import {
+  fetchPasswords,
+  fetchUserSalt,
+  login,
+  registerNewEmail,
+  setNewUserAuthKey,
+  type EncryptedPassword,
+} from './serverAPI';
+import { PasswordsPage, type Password } from './pages/PasswordsPage';
+import { RegisterPage } from './pages/RegisterPage';
 
 // TODO: get real method when its ready
 const testGenerateAuthKey = (_masterPassword: string): Promise<string> => {
   return Promise.resolve('TEST_AUTH_KEY');
+};
+
+const testDecryptPasswords = (_pws: EncryptedPassword[]): Promise<Password[]> => {
+  return Promise.resolve([
+    {
+      itemName: 'PW1',
+      username: 'jake',
+      password: '12345',
+    },
+    {
+      itemName: 'PW2',
+      username: 'jake',
+      password: '54321',
+    },
+  ]);
 };
 
 function App() {
@@ -35,8 +58,19 @@ function Routes() {
           redirect={redirect}
         />
       );
+    case '/register':
+      return (
+        <RegisterPage
+          generateAuthKey={testGenerateAuthKey}
+          registerNewEmail={registerNewEmail}
+          setNewUserAuthKey={setNewUserAuthKey}
+          redirect={redirect}
+        />
+      );
     case '/passwords':
-      return <PasswordsPage />;
+      return (
+        <PasswordsPage fetchPasswords={fetchPasswords} decryptPasswords={testDecryptPasswords} />
+      );
     default:
       return <PageNotFound />;
   }
