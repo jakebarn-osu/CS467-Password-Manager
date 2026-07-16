@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { generateSaltString } from '@app/crypto';
+
 import './App.css';
 import { LoginPage } from './pages/LoginPage';
 import {
@@ -6,14 +8,13 @@ import {
   fetchUserSalt,
   login,
   registerNewEmail,
-  setNewUserAuthKey,
   type EncryptedPassword,
 } from './serverAPI';
 import { PasswordsPage, type Password } from './pages/PasswordsPage';
 import { RegisterPage } from './pages/RegisterPage';
 
 // TODO: get real method when its ready
-const testGenerateAuthKey = (_masterPassword: string): Promise<string> => {
+const testGenerateAuthKey = (_masterPassword: string, _salt: string): Promise<string> => {
   return Promise.resolve('TEST_AUTH_KEY');
 };
 
@@ -61,9 +62,9 @@ function Routes() {
     case '/register':
       return (
         <RegisterPage
+          generateSalt={generateSaltString}
           generateAuthKey={testGenerateAuthKey}
-          registerNewEmail={registerNewEmail}
-          setNewUserAuthKey={setNewUserAuthKey}
+          registerNewUser={registerNewEmail}
           redirect={redirect}
         />
       );

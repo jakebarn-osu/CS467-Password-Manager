@@ -1,7 +1,11 @@
+import { type RegisterRequest, type RegisterResponse } from '@app/shared';
+
 export type ServerResponse<T> = {
   data: T;
   publicErrorMessage: string;
 };
+
+const DEFAULT_SERVER_ERROR = 'Unable to reach the server. Please try again later.';
 
 type UserSalt = string;
 
@@ -41,53 +45,20 @@ export async function fetchUserSalt(email: string): Promise<ServerResponse<UserS
   }
 }
 
-export async function registerNewEmail(email: string): Promise<ServerResponse<UserSalt>> {
-  const url = '/register';
+const DEFAULT_REGISTER_ERROR = 'Error registering.';
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email }),
-    });
-
-    if (!response.ok) {
-      console.error(response);
-      return {
-        data: '',
-        publicErrorMessage: 'Error registering.',
-      };
-    }
-
-    const responseBody = await response.json();
-    if (!responseBody.salt) {
-      console.error(response);
-      return {
-        data: '',
-        publicErrorMessage: 'Error registering.',
-      };
-    }
-
-    return {
-      data: responseBody.salt,
-      publicErrorMessage: '',
-    };
-  } catch (error) {
-    console.error(error);
-    return {
-      data: '',
-      publicErrorMessage: 'Error registering.',
-    };
-  }
-}
-
-export async function setNewUserAuthKey(
+export async function registerNewEmail(
   email: string,
   authKey: string,
-): Promise<ServerResponse<boolean>> {
-  const url = '/setAuthKey';
+  salt: string,
+): Promise<ServerResponse<RegisterResponse | null>> {
+  const url = '/api/v1/auth/register';
+
+  const body: RegisterRequest = {
+    email,
+    authKey,
+    salt,
+  };
 
   try {
     const response = await fetch(url, {
@@ -95,23 +66,31 @@ export async function setNewUserAuthKey(
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, authKey }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
       console.error(response);
+
+      let publicMessage = DEFAULT_REGISTER_ERROR;
+
+      if (response.status == 409) {
+        publicMessage = 'This email address is already registered.';
+      } else if (response.status >= 500 && response.status < 600)
+        publicMessage = DEFAULT_SERVER_ERROR;
+
       return {
-        data: false,
-        publicErrorMessage: 'Error registering.',
+        data: null,
+        publicErrorMessage: publicMessage,
       };
     }
 
     const responseBody = await response.json();
-    if (!responseBody.success) {
-      console.error(response);
+    if (!responseBody.id || !responseBody.email) {
+      console.error('Invalid response: ', response);
       return {
-        data: false,
-        publicErrorMessage: 'Error registering.',
+        data: null,
+        publicErrorMessage: DEFAULT_REGISTER_ERROR,
       };
     }
 
@@ -122,8 +101,8 @@ export async function setNewUserAuthKey(
   } catch (error) {
     console.error(error);
     return {
-      data: false,
-      publicErrorMessage: 'Error registering.',
+      data: null,
+      publicErrorMessage: DEFAULT_REGISTER_ERROR,
     };
   }
 }

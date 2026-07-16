@@ -6,11 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "check": "tsc --noEmit",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run"
   },
   "dependencies": {
+    "@app/crypto": "*",
     "@app/shared": "*",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
