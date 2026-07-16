@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { type ServerResponse } from '../serverAPI';
+import type { LoginResponse, SaltResponse } from '@app/shared';
 
 // Login is a four step process.
 //   1. A user enters their email and we fetch the salt associated with that email.
@@ -14,9 +15,9 @@ export function LoginPage({
   login,
   redirect,
 }: {
-  fetchUserSalt: (email: string) => Promise<ServerResponse<string>>;
+  fetchUserSalt: (email: string) => Promise<ServerResponse<SaltResponse | null>>;
   generateAuthKey: (masterPassword: string, salt: string) => Promise<string>;
-  login: (authKey: string) => Promise<ServerResponse<boolean>>;
+  login: (email: string, authKey: string) => Promise<ServerResponse<LoginResponse | null>>;
   redirect: (newPath: string) => void;
 }) {
   const [formEmail, setFormEmail] = useState('');
@@ -37,9 +38,9 @@ export function LoginPage({
     setUserSalt('');
     setFetchUserSaltError('');
 
-    const { data: salt, publicErrorMessage } = await fetchUserSalt(formEmail);
+    const { data, publicErrorMessage } = await fetchUserSalt(formEmail);
     setFetchUserSaltError(publicErrorMessage);
-    setUserSalt(salt);
+    setUserSalt(data!.salt);
   };
 
   const handleGenerateAuthKeyAndLogin = async (
@@ -54,11 +55,15 @@ export function LoginPage({
 
     try {
       const key = await generateAuthKey(userSalt, formPassword);
-      const { data: success, publicErrorMessage } = await login(key);
-      if (!success) {
+      const { data, publicErrorMessage } = await login(formEmail, key);
+      if (!data) {
         setLoginError(publicErrorMessage);
         return;
       }
+
+      // TODO: store in sessionStorage for now, not secure. We probably want to
+      // move to a cookie.
+      sessionStorage.setItem('token', data.token);
 
       redirect('/passwords');
     } catch (e) {
