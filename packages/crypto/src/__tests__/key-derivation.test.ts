@@ -4,7 +4,7 @@
  * verified separately. Vault-item encryption lands in a later PR, so these
  * tests exercise the derived keys with the Web Crypto AES-GCM API directly.
  */
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   base64ToBytes,
@@ -16,6 +16,21 @@ import {
   generateSalt,
   type KdfParams,
 } from "../crypto.js";
+
+// Wrap hash-wasm's argon2id so tests can count how many times the KDF runs
+const { argon2idSpy } = vi.hoisted(() => ({ argon2idSpy: vi.fn() }));
+vi.mock("hash-wasm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("hash-wasm")>();
+  return {
+    ...actual,
+    argon2id: (opts: Parameters<typeof actual.argon2id>[0]) => {
+      argon2idSpy(opts);
+      return actual.argon2id(opts);
+    },
+  };
+});
+
+beforeEach(() => argon2idSpy.mockClear());
 
 const FAST_KDF_PARAMS: KdfParams = {
   version: 1,
@@ -136,5 +151,24 @@ describe("deriveKeys", () => {
     await expect(
       crypto.subtle.decrypt({ name: "AES-GCM", iv: nonce }, wrong, ciphertext),
     ).rejects.toThrow();
+  });
+});
+
+describe("Argon2id invocation", () => {
+  it("deriveKeys runs Argon2id exactly once for both keys", async () => {
+    await deriveKeys("master-pw", generateSalt(), FAST_KDF_PARAMS);
+    expect(argon2idSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a salt shorter than the minimum before invoking Argon2id", async () => {
+    await expect(deriveAuthKey("pw", new Uint8Array(4), FAST_KDF_PARAMS)).rejects.toThrow(/salt/i);
+    expect(argon2idSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects memoryKiB < 8 * parallelism before invoking Argon2id", async () => {
+    await expect(
+      deriveAuthKey("pw", generateSalt(), { ...FAST_KDF_PARAMS, memoryKiB: 8, parallelism: 2 }),
+    ).rejects.toThrow(/memory/i);
+    expect(argon2idSpy).not.toHaveBeenCalled();
   });
 });

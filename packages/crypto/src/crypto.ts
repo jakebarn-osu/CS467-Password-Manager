@@ -57,6 +57,8 @@ export const PAYLOAD_VERSION = 1;
 export const NONCE_LENGTH = 12;
 /** GCM appends a 16-byte auth tag, so no valid ciphertext is shorter than this. */
 const MIN_CIPHERTEXT_LENGTH = 16;
+/** Minimum salt length. generateSalt() produces 16 bytes; shorter salts are rejected. */
+const MIN_SALT_LENGTH = 16;
 
 /** Error thrown by Phase 1 stub functions. */
 class NotImplementedError extends Error {
@@ -132,8 +134,14 @@ async function deriveMasterKey(
   requireIntInRange("memoryKiB", params.memoryKiB, KDF_LIMITS.memoryKiB);
   requireIntInRange("iterations", params.iterations, KDF_LIMITS.iterations);
   requireIntInRange("parallelism", params.parallelism, KDF_LIMITS.parallelism);
-  if (salt.length === 0) {
-    throw new Error("salt must not be empty");
+  // Argon2 also requires memoryKiB >= 8 * parallelism
+  if (params.memoryKiB < 8 * params.parallelism) {
+    throw new Error(
+      `KdfParams.memoryKiB must be at least 8 * parallelism (${8 * params.parallelism}), got ${params.memoryKiB}`,
+    );
+  }
+  if (salt.length < MIN_SALT_LENGTH) {
+    throw new Error(`salt must be at least ${MIN_SALT_LENGTH} bytes, got ${salt.length}`);
   }
   const masterKeyBytes = await argon2id({
     password: masterPassword,
@@ -184,7 +192,7 @@ export interface DerivedKeys {
 }
 
 /**
- * Derives both keys with a SINGLE Argon2id run (at login/registration.
+ * Derives both keys with a SINGLE Argon2id run (at login/registration).
  * Calling deriveAuthKey and deriveEncryptionKey separately runs the expensive memory-hard KDF twice for no benefit.
  */
 export async function deriveKeys(
