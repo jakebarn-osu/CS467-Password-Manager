@@ -9,6 +9,8 @@
  *     --HKDF("enc")-->     encryptionKey  (never leaves the client)
  */
 
+import { argon2id } from "hash-wasm";
+
 /**
  * The secret fields of a vault entry — the input to encryptVaultItem and
  * the output of decryptVaultItem. Exists only in memory on the client;
@@ -25,16 +27,19 @@ export interface VaultItemSecret {
   notes?: string;
 }
 
+/** Current KdfParams version. Bump when the KDF scheme changes; keep any stored params in sync. */
+export const KDF_PARAMS_VERSION = 1;
+
 /** Argon2id parameters */
 export interface KdfParams {
-  version: 1; // Manage the version of the KDF parameters.
+  version: typeof KDF_PARAMS_VERSION; // Manage the version of the KDF parameters.
   algorithm: "argon2id";
   memoryKiB: number; // Memory cost in KiB (e.g. 65536 = 64 MiB).
   iterations: number; // Time cost (number of passes).
   parallelism: number;
 }
 export const DEFAULT_KDF_PARAMS: KdfParams = {
-  version: 1,
+  version: KDF_PARAMS_VERSION,
   algorithm: "argon2id",
   memoryKiB: 65536,
   iterations: 3,
@@ -81,28 +86,147 @@ export function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+// ---- key derivation ----
+
+/**
+ * Sanity bounds for KdfParams.
+ * A corrupted record must be rejected before it reaches the Argon2 WASM
+ * (a huge memoryKiB would otherwise hang).
+ */
+const KDF_LIMITS = {
+  memoryKiB: { min: 8, max: 1 << 20 }, // 8 KiB .. 1 GiB
+  iterations: { min: 1, max: 64 },
+  parallelism: { min: 1, max: 16 },
+} as const;
+
+/**
+ * HKDF context labels. 
+ * Frozen forever: changing a label changes every derived key and would lock all users out of their vaults.
+ */
+const HKDF_INFO_AUTH = "auth";
+const HKDF_INFO_ENC = "enc";
+
+/** Checks that a KdfParams field is an integer in the given range. */
+function requireIntInRange(
+  name: string,
+  value: number,
+  range: { min: number; max: number },
+): void {
+  if (!Number.isInteger(value) || value < range.min || value > range.max) {
+    throw new Error(
+      `KdfParams.${name} must be an integer in [${range.min}, ${range.max}], got ${value}`,
+    );
+  }
+}
+
+/** Argon2id: master password + salt -> master key, wrapped for HKDF use. */
+async function deriveMasterKey(
+  masterPassword: string,
+  salt: Uint8Array,
+  params: KdfParams,
+): Promise<CryptoKey> {
+  // Validate the KdfParams before passing them to Argon2id.
+  if ((params.version as number) !== KDF_PARAMS_VERSION) {
+    throw new Error(`Unsupported KDF params version: ${params.version}`);
+  }
+  requireIntInRange("memoryKiB", params.memoryKiB, KDF_LIMITS.memoryKiB);
+  requireIntInRange("iterations", params.iterations, KDF_LIMITS.iterations);
+  requireIntInRange("parallelism", params.parallelism, KDF_LIMITS.parallelism);
+  if (salt.length === 0) {
+    throw new Error("salt must not be empty");
+  }
+  const masterKeyBytes = await argon2id({
+    password: masterPassword,
+    salt,
+    hashLength: 32,
+    memorySize: params.memoryKiB,
+    iterations: params.iterations,
+    parallelism: params.parallelism,
+    outputType: "binary",
+  });
+  // Non-extractable: the master key never needs to leave this module.
+  return crypto.subtle.importKey("raw", masterKeyBytes as Uint8Array<ArrayBuffer>, "HKDF", false, [
+    "deriveBits",
+    "deriveKey",
+  ]);
+}
+
+function hkdfParams(info: string): HkdfParams {
+  return {
+    name: "HKDF",
+    hash: "SHA-256",
+    salt: new Uint8Array(0), // the input key is already high-entropy so no extra salt is needed (per-user separation comes from the Argon2 salt)
+    info: new TextEncoder().encode(info),
+  };
+}
+
+async function hkdfAuthKey(masterKey: CryptoKey): Promise<Uint8Array<ArrayBuffer>> {
+  const bits = await crypto.subtle.deriveBits(hkdfParams(HKDF_INFO_AUTH), masterKey, 256);
+  return new Uint8Array(bits);
+}
+
+function hkdfEncryptionKey(masterKey: CryptoKey): Promise<CryptoKey> {
+  return crypto.subtle.deriveKey(
+    hkdfParams(HKDF_INFO_ENC),
+    masterKey,
+    { name: "AES-GCM", length: 256 },
+    false, // non-extractable
+    ["encrypt", "decrypt"],
+  );
+}
+
+/** Both client-side keys, derived together. */
+export interface DerivedKeys {
+  /** Login credential — serialize with bytesToBase64() for the request body. */
+  authKey: Uint8Array<ArrayBuffer>;
+  /** Vault encryption key — non-extractable, never leaves the client. */
+  encryptionKey: CryptoKey;
+}
+
+/**
+ * Derives both keys with a SINGLE Argon2id run (at login/registration.
+ * Calling deriveAuthKey and deriveEncryptionKey separately runs the expensive memory-hard KDF twice for no benefit.
+ */
+export async function deriveKeys(
+  masterPassword: string,
+  salt: Uint8Array,
+  params: KdfParams = DEFAULT_KDF_PARAMS,
+): Promise<DerivedKeys> {
+  const masterKey = await deriveMasterKey(masterPassword, salt, params);
+  const [authKey, encryptionKey] = await Promise.all([
+    hkdfAuthKey(masterKey),
+    hkdfEncryptionKey(masterKey),
+  ]);
+  return { authKey, encryptionKey };
+}
+
 /**
  * Derives the key sent to the server as the login credential.
  * The server treats it as an opaque password and hashes it again.
+ * Use bytesToBase64() to serialize it for the register/login request body.
+ * If you also need the encryption key, call deriveKeys() instead.
  */
 export async function deriveAuthKey(
-  _masterPassword: string,
-  _salt: Uint8Array,
-  _params: KdfParams = DEFAULT_KDF_PARAMS,
+  masterPassword: string,
+  salt: Uint8Array,
+  params: KdfParams = DEFAULT_KDF_PARAMS,
 ): Promise<Uint8Array<ArrayBuffer>> {
-  throw new NotImplementedError("deriveAuthKey");
+  const masterKey = await deriveMasterKey(masterPassword, salt, params);
+  return hkdfAuthKey(masterKey);
 }
 
 /**
  * Derives the vault encryption key.
  * Returned as a non-extractable CryptoKey so it cannot be serialized or accidentally sent anywhere.
+ * If you also need the auth key, call deriveKeys() instead.
  */
 export async function deriveEncryptionKey(
-  _masterPassword: string,
-  _salt: Uint8Array,
-  _params: KdfParams = DEFAULT_KDF_PARAMS,
+  masterPassword: string,
+  salt: Uint8Array,
+  params: KdfParams = DEFAULT_KDF_PARAMS,
 ): Promise<CryptoKey> {
-  throw new NotImplementedError("deriveEncryptionKey");
+  const masterKey = await deriveMasterKey(masterPassword, salt, params);
+  return hkdfEncryptionKey(masterKey);
 }
 
 /** Generates a fresh random per-user salt (registration time). */
