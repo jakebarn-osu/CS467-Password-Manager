@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react';
 import type { ServerResponse } from '../serverAPI';
-import type { VaultItem } from '@app/shared';
+import type { MeResponse, VaultItem } from '@app/shared';
 import type { VaultItemSecret } from '@app/crypto';
 
-export type Password = VaultItemSecret & { id: string };
+export type Password = VaultItemSecret;
 
 export function PasswordsPage({
   fetchVaultItems,
   decryptVaultItem,
   encryptionKey,
+  fetchMe,
 }: {
   fetchVaultItems: () => Promise<ServerResponse<VaultItem[] | null>>;
   decryptVaultItem: (payload: string, key: CryptoKey) => Promise<VaultItemSecret>;
   encryptionKey: CryptoKey;
+  fetchMe: () => Promise<ServerResponse<MeResponse | null>>;
 }) {
   const [passwords, setPasswords] = useState<Password[] | null>(null);
   const [passwordsError, setPasswordsError] = useState('');
+  const [userEmail, setUserEmail] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -34,7 +37,6 @@ export function PasswordsPage({
       try {
         const passwords = await Promise.all(
           vaultItems.map(async (item) => ({
-            id: item.id,
             ...(await decryptVaultItem(item.encryptedData, encryptionKey)),
           })),
         );
@@ -47,9 +49,19 @@ export function PasswordsPage({
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const fetchMeData = async () => {
+      const { data } = await fetchMe();
+      setUserEmail(data?.email ?? '');
+    };
+
+    fetchMeData();
+  }, []);
+
   return (
     <div>
       <h2>Passwords</h2>
+      {userEmail && <p>Logged in as {userEmail}</p>}
       <section className="basic-flex">
         {passwordsError && (
           <section>
@@ -60,9 +72,9 @@ export function PasswordsPage({
         {passwords &&
           !passwordsError &&
           passwords.length > 0 &&
-          passwords.map((p) => {
+          passwords.map((p, i) => {
             return (
-              <div className="password-item" key={p.id}>
+              <div className="password-item" key={i}>
                 <h5>{p.siteName}</h5>
                 <p>Username: {p.username}</p>
                 <p>Password: {p.password}</p>

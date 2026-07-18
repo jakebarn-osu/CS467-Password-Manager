@@ -1,6 +1,7 @@
 import {
   type LoginRequest,
   type LoginResponse,
+  type MeResponse,
   type RegisterRequest,
   type RegisterResponse,
   type SaltResponse,
@@ -173,6 +174,58 @@ export async function login(
     return {
       data: null,
       publicErrorMessage: DEFAULT_LOGIN_ERROR,
+    };
+  }
+}
+
+const DEFAULT_ME_ERROR = 'Error fetching account details.';
+
+export async function fetchMe(): Promise<ServerResponse<MeResponse | null>> {
+  const url = '/api/v1/auth/me';
+
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_ME_ERROR,
+    };
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      console.error(response);
+      return {
+        data: null,
+        publicErrorMessage: DEFAULT_ME_ERROR,
+      };
+    }
+
+    const responseBody: MeResponse = await response.json();
+    if (!responseBody.email) {
+      console.error('Invalid response: ', response);
+      return {
+        data: null,
+        publicErrorMessage: DEFAULT_ME_ERROR,
+      };
+    }
+
+    return {
+      data: responseBody,
+      publicErrorMessage: '',
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_ME_ERROR,
     };
   }
 }

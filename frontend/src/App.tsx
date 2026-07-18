@@ -3,7 +3,7 @@ import { deriveKeys, generateSalt, type VaultItemSecret } from '@app/crypto';
 
 import './App.css';
 import { LoginPage } from './pages/LoginPage';
-import { fetchVaultItems, fetchUserSalt, login, registerNewEmail } from './serverAPI';
+import { fetchMe, fetchVaultItems, fetchUserSalt, login, registerNewEmail } from './serverAPI';
 import { PasswordsPage } from './pages/PasswordsPage';
 import { RegisterPage } from './pages/RegisterPage';
 
@@ -58,6 +58,7 @@ function Routes() {
           fetchVaultItems={fetchVaultItems}
           decryptVaultItem={testDecryptVaultItem}
           encryptionKey={testEncryptionKey}
+          fetchMe={fetchMe}
         />
       );
     default:
