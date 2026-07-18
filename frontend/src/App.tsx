@@ -13,11 +13,6 @@ import {
 import { PasswordsPage, type Password } from './pages/PasswordsPage';
 import { RegisterPage } from './pages/RegisterPage';
 
-// TODO: get real method when its ready
-const testGenerateAuthKey = (_masterPassword: string, _salt: string): Promise<string> => {
-  return Promise.resolve('TEST_AUTH_KEY');
-};
-
 const testDecryptPasswords = (_pws: EncryptedPassword[]): Promise<Password[]> => {
   return Promise.resolve([
     {
@@ -54,7 +49,7 @@ function Routes() {
       return (
         <LoginPage
           fetchUserSalt={fetchUserSalt}
-          generateAuthKey={testGenerateAuthKey}
+          deriveKeys={deriveKeys}
           login={login}
           redirect={redirect}
         />

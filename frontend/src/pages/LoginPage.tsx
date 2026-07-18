@@ -1,27 +1,28 @@
 import { useState } from 'react';
 import { type ServerResponse } from '../serverAPI';
 import type { LoginResponse, SaltResponse } from '@app/shared';
+import { base64ToBytes, bytesToBase64, type DerivedKeys } from '@app/crypto';
 
 // Login is a four step process.
 //   1. A user enters their email and we fetch the salt associated with that email.
 //   2. A user enters their master password. We use this and the salt from step 1
-//      to generate an auth key.
+//      to derive an auth key.
 //   3. We send the auth key to the server for validation. If it is valid, the server
 //      sets a bearer token in a secure cookie that authorizes future requests.
 //   4. We redirect the user to the passwords page.
 export function LoginPage({
   fetchUserSalt,
-  generateAuthKey,
+  deriveKeys,
   login,
   redirect,
 }: {
   fetchUserSalt: (email: string) => Promise<ServerResponse<SaltResponse | null>>;
-  generateAuthKey: (masterPassword: string, salt: string) => Promise<string>;
+  deriveKeys: (masterPassword: string, salt: Uint8Array) => Promise<DerivedKeys>;
   login: (email: string, authKey: string) => Promise<ServerResponse<LoginResponse | null>>;
   redirect: (newPath: string) => void;
 }) {
   const [formEmail, setFormEmail] = useState('');
-  const [userSalt, setUserSalt] = useState('');
+  const [userSalt, setUserSalt] = useState<Uint8Array | null>(null);
   const [fetchUserSaltError, setFetchUserSaltError] = useState('');
 
   const [formPassword, setFormPassword] = useState('');
@@ -35,7 +36,7 @@ export function LoginPage({
       return;
     }
 
-    setUserSalt('');
+    setUserSalt(null);
     setFetchUserSaltError('');
 
     const { data, publicErrorMessage } = await fetchUserSalt(formEmail);
@@ -43,7 +44,7 @@ export function LoginPage({
     if (!data) {
       return;
     }
-    setUserSalt(data.salt);
+    setUserSalt(base64ToBytes(data.salt));
   };
 
   const handleGenerateAuthKeyAndLogin = async (
@@ -52,13 +53,13 @@ export function LoginPage({
     ev.preventDefault();
 
     // TODO: add client side password validation
-    if (!formPassword) {
+    if (!formPassword || !userSalt) {
       return;
     }
 
     try {
-      const key = await generateAuthKey(userSalt, formPassword);
-      const { data, publicErrorMessage } = await login(formEmail, key);
+      const { authKey } = await deriveKeys(formPassword, userSalt);
+      const { data, publicErrorMessage } = await login(formEmail, bytesToBase64(authKey));
       if (!data) {
         setLoginError(publicErrorMessage);
         return;

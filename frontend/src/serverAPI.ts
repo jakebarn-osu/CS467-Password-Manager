@@ -149,7 +149,7 @@ export async function login(
 
       return {
         data: null,
-        publicErrorMessage: DEFAULT_LOGIN_ERROR,
+        publicErrorMessage: publicMessage,
       };
     }
 

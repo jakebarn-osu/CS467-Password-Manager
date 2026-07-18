@@ -3,13 +3,17 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LoginPage } from './LoginPage';
+import { bytesToBase64 } from '@app/crypto';
+
+const SOME_SALT = new Uint8Array([1, 2, 3]);
+const SOME_AUTH_KEY = new Uint8Array([4, 5, 6]);
 
 function renderLoginPage(overrides = {}) {
   const props = {
     fetchUserSalt: vi
       .fn()
-      .mockResolvedValue({ data: { salt: 'some-salt' }, publicErrorMessage: '' }),
-    generateAuthKey: vi.fn().mockResolvedValue('some-auth-key'),
+      .mockResolvedValue({ data: { salt: bytesToBase64(SOME_SALT) }, publicErrorMessage: '' }),
+    deriveKeys: vi.fn().mockResolvedValue({ authKey: SOME_AUTH_KEY, encryptionKey: {} }),
     login: vi.fn().mockResolvedValue({
       data: { token: 'some-token', tokenType: 'Bearer', expiresIn: 3600 },
       publicErrorMessage: '',
@@ -79,8 +83,8 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByText('Submit'));
 
     await vi.waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/passwords'));
-    expect(props.generateAuthKey).toHaveBeenCalledWith('some-salt', 'super-secret');
-    expect(props.login).toHaveBeenCalledWith('user@example.com', 'some-auth-key');
+    expect(props.deriveKeys).toHaveBeenCalledWith('super-secret', SOME_SALT);
+    expect(props.login).toHaveBeenCalledWith('user@example.com', bytesToBase64(SOME_AUTH_KEY));
     expect(sessionStorage.getItem('token')).toBe('some-token');
   });
 
@@ -105,7 +109,7 @@ describe('LoginPage', () => {
 
   it('shows a generic error message if login throws', async () => {
     const props = renderLoginPage({
-      generateAuthKey: vi.fn().mockRejectedValue(new Error('boom')),
+      deriveKeys: vi.fn().mockRejectedValue(new Error('boom')),
     });
 
     fireEvent.input(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
