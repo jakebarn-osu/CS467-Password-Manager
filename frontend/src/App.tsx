@@ -1,11 +1,29 @@
 import { useEffect, useState } from 'react';
-import { deriveKeys, decryptVaultItem, generateSalt, type DerivedKeys } from '@app/crypto';
+import {
+  deriveKeys,
+  decryptVaultItem,
+  generateSalt,
+  type DerivedKeys,
+  type VaultItemSecret,
+} from '@app/crypto';
 
 import './App.css';
 import { LoginPage } from './pages/LoginPage';
-import { fetchMe, fetchVaultItems, fetchUserSalt, login, registerNewEmail } from './serverAPI';
+import {
+  createVaultItem,
+  fetchMe,
+  fetchVaultItems,
+  fetchUserSalt,
+  login,
+  registerNewEmail,
+} from './serverAPI';
 import { PasswordsPage } from './pages/PasswordsPage';
 import { RegisterPage } from './pages/RegisterPage';
+
+// TODO: replace with crypto's encryptVaultItem once it's implemented (Phase 2).
+const testEncryptVaultItem = (_item: VaultItemSecret, _key: CryptoKey): Promise<string> => {
+  return Promise.resolve('ENCRYPTED-BLOB');
+};
 
 function App() {
   return (
@@ -60,6 +78,8 @@ function Routes() {
         <PasswordsPage
           fetchVaultItems={fetchVaultItems}
           decryptVaultItem={decryptVaultItem}
+          encryptVaultItem={testEncryptVaultItem}
+          createVaultItem={createVaultItem}
           encryptionKey={keys?.encryptionKey}
           fetchMe={fetchMe}
           redirect={redirect}

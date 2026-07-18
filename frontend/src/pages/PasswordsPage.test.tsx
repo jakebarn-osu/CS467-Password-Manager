@@ -1,6 +1,6 @@
 // Parts of this file were generated with AI assistance (Claude Code, Anthropic, 2026).
 // Prompts used: "write some very simple tests for passwordspage.tsx"
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { PasswordsPage } from './PasswordsPage';
 
@@ -10,6 +10,13 @@ function renderPasswordsPage(overrides = {}) {
   const props = {
     fetchVaultItems: vi.fn().mockResolvedValue({ data: [], publicErrorMessage: '' }),
     decryptVaultItem: vi.fn(),
+    encryptVaultItem: vi.fn().mockResolvedValue('encrypted-blob'),
+    createVaultItem: vi
+      .fn()
+      .mockResolvedValue({
+        data: { id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' },
+        publicErrorMessage: '',
+      }),
     encryptionKey: STUB_KEY,
     fetchMe: vi
       .fn()
@@ -20,6 +27,15 @@ function renderPasswordsPage(overrides = {}) {
 
   render(<PasswordsPage {...props} />);
   return props;
+}
+
+function fillOutCreateForm(siteName: string, username: string, password: string) {
+  const textboxes = screen.getAllByRole('textbox');
+  fireEvent.input(textboxes[0], { target: { value: siteName } });
+  fireEvent.input(textboxes[1], { target: { value: username } });
+  fireEvent.input(document.querySelector('input[type="password"]')!, {
+    target: { value: password },
+  });
 }
 
 describe('PasswordsPage', () => {
@@ -127,5 +143,80 @@ describe('PasswordsPage', () => {
 
     await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
     expect(props.redirect).not.toHaveBeenCalled();
+  });
+
+  it('renders the create password form', async () => {
+    const props = renderPasswordsPage();
+
+    expect(screen.getByText('Create New Password Entry')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Site name')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Username')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Password')).toBeInTheDocument();
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+  });
+
+  it('does not create a password when a field is empty', async () => {
+    const props = renderPasswordsPage();
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByText('Save'));
+
+    expect(props.encryptVaultItem).not.toHaveBeenCalled();
+    expect(props.createVaultItem).not.toHaveBeenCalled();
+  });
+
+  it('encrypts and saves a new password entry on submit', async () => {
+    const props = renderPasswordsPage();
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+
+    fillOutCreateForm('Example Site', 'someone', 'super-secret');
+    fireEvent.click(screen.getByText('Save'));
+
+    await waitFor(() =>
+      expect(props.encryptVaultItem).toHaveBeenCalledWith(
+        { siteName: 'Example Site', username: 'someone', password: 'super-secret' },
+        STUB_KEY,
+      ),
+    );
+    expect(props.createVaultItem).toHaveBeenCalledWith('encrypted-blob');
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalledTimes(2));
+  });
+
+  it('clears the form after successfully saving a new password entry', async () => {
+    const props = renderPasswordsPage();
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+
+    fillOutCreateForm('Example Site', 'someone', 'super-secret');
+    fireEvent.click(screen.getByText('Save'));
+
+    await waitFor(() => expect(screen.getByPlaceholderText('Site name')).toHaveValue(''));
+    expect(screen.getByPlaceholderText('Username')).toHaveValue('');
+    expect(screen.getByPlaceholderText('Password')).toHaveValue('');
+  });
+
+  it('shows an error message when saving a new password entry fails', async () => {
+    const props = renderPasswordsPage({
+      createVaultItem: vi
+        .fn()
+        .mockResolvedValue({ data: null, publicErrorMessage: 'Error saving password.' }),
+    });
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+
+    fillOutCreateForm('Example Site', 'someone', 'super-secret');
+    fireEvent.click(screen.getByText('Save'));
+
+    expect(await screen.findByText('Error: Error saving password.')).toBeInTheDocument();
+  });
+
+  it('shows a generic error message if encrypting the new password entry throws', async () => {
+    const props = renderPasswordsPage({
+      encryptVaultItem: vi.fn().mockRejectedValue(new Error('boom')),
+    });
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+
+    fillOutCreateForm('Example Site', 'someone', 'super-secret');
+    fireEvent.click(screen.getByText('Save'));
+
+    expect(await screen.findByText('Error: Error saving password.')).toBeInTheDocument();
   });
 });
