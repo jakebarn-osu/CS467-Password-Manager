@@ -17,7 +17,7 @@ const DEFAULT_SERVER_ERROR = 'Unable to reach the server. Please try again later
 const DEFAULT_LOGIN_ERROR = 'Error logging in.';
 
 export async function fetchUserSalt(email: string): Promise<ServerResponse<SaltResponse | null>> {
-  const url = `/api/v1/auth/salt?email=${email}`;
+  const url = `/api/v1/auth/salt?email=${encodeURIComponent(email)}`;
 
   try {
     const response = await fetch(url);
@@ -154,6 +154,13 @@ export async function login(
     }
 
     const responseJson = await response.json();
+    if (!responseJson.token) {
+      console.error('Invalid response: ', response);
+      return {
+        data: null,
+        publicErrorMessage: DEFAULT_LOGIN_ERROR,
+      };
+    }
 
     return {
       data: responseJson,
@@ -177,11 +184,19 @@ export type EncryptedPassword = {
 export async function fetchPasswords(): Promise<ServerResponse<EncryptedPassword[] | null>> {
   const url = `/passwords`;
 
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    return {
+      data: null,
+      publicErrorMessage: 'Error fetching passwords.',
+    };
+  }
+
   try {
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${sessionStorage.getItem('token')}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     });
