@@ -11,7 +11,9 @@ function renderRegisterPage(overrides = {}) {
   const props = {
     generateSalt: vi.fn().mockReturnValue(SOME_SALT),
     deriveKeys: vi.fn().mockResolvedValue({ authKey: SOME_AUTH_KEY, encryptionKey: {} }),
-    registerNewUser: vi.fn().mockResolvedValue({ data: 'some-salt', publicErrorMessage: '' }),
+    registerNewUser: vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'some-id', email: 'user@example.com' }, publicErrorMessage: '' }),
     redirect: vi.fn(),
     ...overrides,
   };

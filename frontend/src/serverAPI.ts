@@ -96,7 +96,7 @@ export async function registerNewEmail(
     }
 
     return {
-      data: responseBody.salt,
+      data: responseBody,
       publicErrorMessage: '',
     };
   } catch (error) {
