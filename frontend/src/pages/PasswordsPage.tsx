@@ -1,38 +1,43 @@
 import { useEffect, useState } from 'react';
-import type { EncryptedPassword, ServerResponse } from '../serverAPI';
+import type { ServerResponse } from '../serverAPI';
+import type { VaultItem } from '@app/shared';
+import type { VaultItemSecret } from '@app/crypto';
 
-export type Password = {
-  itemName: string;
-  username: string;
-  password: string;
-};
+export type Password = VaultItemSecret & { id: string };
 
 export function PasswordsPage({
-  fetchPasswords,
-  decryptPasswords,
+  fetchVaultItems,
+  decryptVaultItem,
+  encryptionKey,
 }: {
-  fetchPasswords: () => Promise<ServerResponse<EncryptedPassword[] | null>>;
-  decryptPasswords: (encrypted: EncryptedPassword[]) => Promise<Password[]>;
+  fetchVaultItems: () => Promise<ServerResponse<VaultItem[] | null>>;
+  decryptVaultItem: (payload: string, key: CryptoKey) => Promise<VaultItemSecret>;
+  encryptionKey: CryptoKey;
 }) {
   const [passwords, setPasswords] = useState<Password[] | null>(null);
   const [passwordsError, setPasswordsError] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
-      const response = await fetchPasswords();
+      const response = await fetchVaultItems();
       if (response.publicErrorMessage) {
         setPasswordsError(response.publicErrorMessage);
         return;
       }
 
-      const encryptedPasswords = response.data;
-      if (!response.data) {
+      const vaultItems = response.data;
+      if (!vaultItems) {
         setPasswordsError('Error fetching passwords');
         return;
       }
 
       try {
-        const passwords = await decryptPasswords(encryptedPasswords ?? []);
+        const passwords = await Promise.all(
+          vaultItems.map(async (item) => ({
+            id: item.id,
+            ...(await decryptVaultItem(item.encryptedData, encryptionKey)),
+          })),
+        );
         setPasswords(passwords);
       } catch {
         setPasswordsError('Unable to load your passwords.');
@@ -52,20 +57,21 @@ export function PasswordsPage({
           </section>
         )}
 
-        {passwords && !passwordsError ? (
+        {passwords &&
+          !passwordsError &&
+          passwords.length > 0 &&
           passwords.map((p) => {
             return (
-              <div className="password-item" key={p.itemName}>
-                <h5>{p.itemName}</h5>
+              <div className="password-item" key={p.id}>
+                <h5>{p.siteName}</h5>
                 <p>Username: {p.username}</p>
                 <p>Password: {p.password}</p>
               </div>
             );
-          })
-        ) : (
-          <div>No passwords found.</div>
-        )}
+          })}
       </section>
+
+      {passwords && !passwordsError && passwords.length === 0 && <div>No passwords found.</div>}
 
       <section>Create New Password Entry:</section>
       {/* TODO new password form. */}

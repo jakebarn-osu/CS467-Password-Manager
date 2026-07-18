@@ -1,32 +1,21 @@
 import { useState } from 'react';
-import { deriveKeys, generateSalt } from '@app/crypto';
+import { deriveKeys, generateSalt, type VaultItemSecret } from '@app/crypto';
 
 import './App.css';
 import { LoginPage } from './pages/LoginPage';
-import {
-  fetchPasswords,
-  fetchUserSalt,
-  login,
-  registerNewEmail,
-  type EncryptedPassword,
-} from './serverAPI';
-import { PasswordsPage, type Password } from './pages/PasswordsPage';
+import { fetchVaultItems, fetchUserSalt, login, registerNewEmail } from './serverAPI';
+import { PasswordsPage } from './pages/PasswordsPage';
 import { RegisterPage } from './pages/RegisterPage';
 
-const testDecryptPasswords = (_pws: EncryptedPassword[]): Promise<Password[]> => {
-  return Promise.resolve([
-    {
-      itemName: 'PW1',
-      username: 'jake',
-      password: '12345',
-    },
-    {
-      itemName: 'PW2',
-      username: 'jake',
-      password: '54321',
-    },
-  ]);
+const testDecryptVaultItem = (_payload: string, _key: CryptoKey): Promise<VaultItemSecret> => {
+  return Promise.resolve({
+    siteName: 'Example Site',
+    username: 'jake',
+    password: '12345',
+  });
 };
+
+const testEncryptionKey = {} as CryptoKey;
 
 function App() {
   return (
@@ -65,7 +54,11 @@ function Routes() {
       );
     case '/passwords':
       return (
-        <PasswordsPage fetchPasswords={fetchPasswords} decryptPasswords={testDecryptPasswords} />
+        <PasswordsPage
+          fetchVaultItems={fetchVaultItems}
+          decryptVaultItem={testDecryptVaultItem}
+          encryptionKey={testEncryptionKey}
+        />
       );
     default:
       return <PageNotFound />;
