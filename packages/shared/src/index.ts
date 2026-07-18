@@ -35,3 +35,18 @@ export interface MeResponse {
   email: string;
   mfaEnabled: boolean;
 }
+
+export interface VaultItem {
+  id: string;
+  encryptedData: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateVaultItemRequest {
+  encryptedData: string;
+}
+
+export interface VaultItemListResponse {
+  items: VaultItem[];
+}

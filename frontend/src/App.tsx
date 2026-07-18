@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { generateSaltString } from '@app/crypto';
+import { deriveKeys, generateSalt } from '@app/crypto';
 
 import './App.css';
 import { LoginPage } from './pages/LoginPage';
@@ -62,8 +62,8 @@ function Routes() {
     case '/register':
       return (
         <RegisterPage
-          generateSalt={generateSaltString}
-          generateAuthKey={testGenerateAuthKey}
+          generateSalt={generateSalt}
+          deriveKeys={deriveKeys}
           registerNewUser={registerNewEmail}
           redirect={redirect}
         />

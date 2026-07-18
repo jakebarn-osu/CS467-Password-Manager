@@ -5,6 +5,7 @@ import {
   type RegisterResponse,
   type SaltResponse,
 } from '@app/shared';
+import { bytesToBase64 } from '@app/crypto';
 
 export type ServerResponse<T> = {
   data: T;
@@ -60,15 +61,15 @@ const DEFAULT_REGISTER_ERROR = 'Error registering.';
 
 export async function registerNewEmail(
   email: string,
-  authKey: string,
-  salt: string,
+  authKey: Uint8Array,
+  salt: Uint8Array,
 ): Promise<ServerResponse<RegisterResponse | null>> {
   const url = '/api/v1/auth/register';
 
   const body: RegisterRequest = {
     email,
-    authKey,
-    salt,
+    authKey: bytesToBase64(authKey),
+    salt: bytesToBase64(salt),
   };
 
   try {
@@ -107,7 +108,7 @@ export async function registerNewEmail(
     }
 
     return {
-      data: responseBody.salt,
+      data: responseBody,
       publicErrorMessage: '',
     };
   } catch (error) {

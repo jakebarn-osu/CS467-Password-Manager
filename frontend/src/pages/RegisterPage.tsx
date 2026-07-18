@@ -10,20 +10,21 @@
 import type { RegisterResponse } from '@app/shared';
 import { useState } from 'react';
 import type { ServerResponse } from '../serverAPI';
+import type { DerivedKeys } from '@app/crypto';
 
 // registration they are redirected to the login page.
 export function RegisterPage({
   generateSalt,
-  generateAuthKey,
+  deriveKeys,
   registerNewUser,
   redirect,
 }: {
-  generateSalt: () => string;
-  generateAuthKey: (masterPassword: string, salt: string) => Promise<string>;
+  generateSalt: () => Uint8Array;
+  deriveKeys: (masterPassword: string, salt: Uint8Array) => Promise<DerivedKeys>;
   registerNewUser: (
     email: string,
-    authKey: string,
-    salt: string,
+    authKey: Uint8Array,
+    salt: Uint8Array,
   ) => Promise<ServerResponse<RegisterResponse | null>>;
   redirect: (newPath: string) => void;
 }) {
@@ -41,8 +42,8 @@ export function RegisterPage({
 
     try {
       const userSalt = generateSalt();
-      const userAuthKey = await generateAuthKey(formPassword, userSalt);
-      const { publicErrorMessage } = await registerNewUser(formEmail, userAuthKey, userSalt);
+      const { authKey } = await deriveKeys(formPassword, userSalt);
+      const { publicErrorMessage } = await registerNewUser(formEmail, authKey, userSalt);
       if (publicErrorMessage) {
         setRegisterError(publicErrorMessage);
         return;
