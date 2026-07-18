@@ -249,18 +249,34 @@ export function generateNonce(): Uint8Array<ArrayBuffer> {
 
 /** Encrypts the secret fields of a vault item into an encoded payload string. */
 export async function encryptVaultItem(
-  _item: VaultItemSecret,
-  _key: CryptoKey,
+  item: VaultItemSecret,
+  key: CryptoKey,
 ): Promise<string> {
-  throw new NotImplementedError("encryptVaultItem");
+  const nonce = generateNonce();
+  const plaintext = new TextEncoder().encode(JSON.stringify(item));
+  const ciphertext = new Uint8Array(
+    await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, key, plaintext),
+  );
+  return encodeEncryptedPayload({ version: PAYLOAD_VERSION, nonce, ciphertext });
 }
 
 /** Decrypts an encoded payload string back into the secret fields. */
 export async function decryptVaultItem(
-  _payload: string,
-  _key: CryptoKey,
+  payload: string,
+  key: CryptoKey,
 ): Promise<VaultItemSecret> {
-  throw new NotImplementedError("decryptVaultItem");
+  const { nonce, ciphertext } = decodeEncryptedPayload(payload);
+  let plaintext: ArrayBuffer;
+  try {
+    plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: nonce }, key, ciphertext);
+  } catch {
+    throw new Error("Decryption failed: wrong key or corrupted payload");
+  }
+  try {
+    return JSON.parse(new TextDecoder().decode(plaintext)) as VaultItemSecret;
+  } catch {
+    throw new Error("Decryption failed: decrypted data is not a valid vault item");
+  }
 }
 
 /** Encodes version || nonce || ciphertext as base64 for storage/transport. */
