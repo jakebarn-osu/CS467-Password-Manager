@@ -4,10 +4,13 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { RegisterPage } from './RegisterPage';
 
+const SOME_SALT = new Uint8Array([1, 2, 3]);
+const SOME_AUTH_KEY = new Uint8Array([4, 5, 6]);
+
 function renderRegisterPage(overrides = {}) {
   const props = {
-    generateSalt: vi.fn().mockReturnValue('some-salt'),
-    generateAuthKey: vi.fn().mockResolvedValue('some-auth-key'),
+    generateSalt: vi.fn().mockReturnValue(SOME_SALT),
+    deriveKeys: vi.fn().mockResolvedValue({ authKey: SOME_AUTH_KEY, encryptionKey: {} }),
     registerNewUser: vi.fn().mockResolvedValue({ data: 'some-salt', publicErrorMessage: '' }),
     redirect: vi.fn(),
     ...overrides,
@@ -48,11 +51,11 @@ describe('RegisterPage', () => {
 
     await vi.waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
     expect(props.generateSalt).toHaveBeenCalled();
-    expect(props.generateAuthKey).toHaveBeenCalledWith('super-secret', 'some-salt');
+    expect(props.deriveKeys).toHaveBeenCalledWith('super-secret', SOME_SALT);
     expect(props.registerNewUser).toHaveBeenCalledWith(
       'user@example.com',
-      'some-auth-key',
-      'some-salt',
+      SOME_AUTH_KEY,
+      SOME_SALT,
     );
   });
 
@@ -72,7 +75,7 @@ describe('RegisterPage', () => {
 
   it('shows a generic error message if registration throws', async () => {
     const props = renderRegisterPage({
-      generateAuthKey: vi.fn().mockRejectedValue(new Error('boom')),
+      deriveKeys: vi.fn().mockRejectedValue(new Error('boom')),
     });
 
     fillOutForm('user@example.com', 'super-secret');

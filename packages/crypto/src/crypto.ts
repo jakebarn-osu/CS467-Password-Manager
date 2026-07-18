@@ -242,11 +242,6 @@ export function generateSalt(): Uint8Array<ArrayBuffer> {
   return crypto.getRandomValues(new Uint8Array(16));
 }
 
-/** Generates a fresh random salt as a string. */
-export function generateSaltString(): string {
-  const decoder = new TextDecoder();
-  return decoder.decode(generateSalt())
-}
 
 /** Generates a fresh AES-GCM nonce. Must be unique per encryption. */
 export function generateNonce(): Uint8Array<ArrayBuffer> {
