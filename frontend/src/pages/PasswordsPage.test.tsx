@@ -1,6 +1,6 @@
 // Parts of this file were generated with AI assistance (Claude Code, Anthropic, 2026).
 // Prompts used: "write some very simple tests for passwordspage.tsx"
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { PasswordsPage } from './PasswordsPage';
 
@@ -16,16 +16,17 @@ function renderPasswordsPage(overrides = {}) {
 }
 
 describe('PasswordsPage', () => {
-  it('renders the page heading', () => {
-    renderPasswordsPage();
+  it('renders the page heading', async () => {
+    const props = renderPasswordsPage();
 
     expect(screen.getByText('Passwords')).toBeInTheDocument();
+    await waitFor(() => expect(props.decryptPasswords).toHaveBeenCalled());
   });
 
   it('calls fetchPasswords and decryptPasswords on mount', async () => {
     const props = renderPasswordsPage();
 
-    await vi.waitFor(() => expect(props.decryptPasswords).toHaveBeenCalledWith([]));
+    await waitFor(() => expect(props.decryptPasswords).toHaveBeenCalledWith([]));
     expect(props.fetchPasswords).toHaveBeenCalled();
   });
 
