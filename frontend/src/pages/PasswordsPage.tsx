@@ -10,11 +10,13 @@ export function PasswordsPage({
   decryptVaultItem,
   encryptionKey,
   fetchMe,
+  redirect,
 }: {
   fetchVaultItems: () => Promise<ServerResponse<VaultItem[] | null>>;
   decryptVaultItem: (payload: string, key: CryptoKey) => Promise<VaultItemSecret>;
-  encryptionKey: CryptoKey;
+  encryptionKey: CryptoKey | undefined;
   fetchMe: () => Promise<ServerResponse<MeResponse | null>>;
+  redirect: (route: string) => void;
 }) {
   const [passwords, setPasswords] = useState<Password[] | null>(null);
   const [passwordsError, setPasswordsError] = useState('');
@@ -22,6 +24,15 @@ export function PasswordsPage({
 
   useEffect(() => {
     const fetchData = async () => {
+      const { data } = await fetchMe();
+      const email = data?.email ?? '';
+      setUserEmail(email);
+
+      if (!email || !encryptionKey) {
+        redirect('/login');
+        return;
+      }
+
       const response = await fetchVaultItems();
       if (response.publicErrorMessage) {
         setPasswordsError(response.publicErrorMessage);
@@ -47,15 +58,6 @@ export function PasswordsPage({
     };
 
     fetchData();
-  }, []);
-
-  useEffect(() => {
-    const fetchMeData = async () => {
-      const { data } = await fetchMe();
-      setUserEmail(data?.email ?? '');
-    };
-
-    fetchMeData();
   }, []);
 
   return (

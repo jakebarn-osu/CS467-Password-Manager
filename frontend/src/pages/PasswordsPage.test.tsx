@@ -14,6 +14,7 @@ function renderPasswordsPage(overrides = {}) {
     fetchMe: vi
       .fn()
       .mockResolvedValue({ data: { id: 'user-1', email: 'user@example.com', mfaEnabled: false }, publicErrorMessage: '' }),
+    redirect: vi.fn(),
     ...overrides,
   };
 
@@ -97,5 +98,34 @@ describe('PasswordsPage', () => {
     });
 
     await waitFor(() => expect(screen.queryByText(/Logged in as/)).not.toBeInTheDocument());
+  });
+
+  it('redirects to login when there is no auth token', async () => {
+    const props = renderPasswordsPage({
+      fetchMe: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: 'Error fetching account details.' }),
+    });
+
+    await waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
+  });
+
+  it('redirects to login when there is no encryption key', async () => {
+    const props = renderPasswordsPage({ encryptionKey: undefined });
+
+    await waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
+  });
+
+  it('does not fetch or decrypt vault items when redirecting to login', async () => {
+    const props = renderPasswordsPage({ encryptionKey: undefined });
+
+    await waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
+    expect(props.fetchVaultItems).not.toHaveBeenCalled();
+    expect(props.decryptVaultItem).not.toHaveBeenCalled();
+  });
+
+  it('does not redirect when both the user and encryption key are present', async () => {
+    const props = renderPasswordsPage();
+
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+    expect(props.redirect).not.toHaveBeenCalled();
   });
 });
