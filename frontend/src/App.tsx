@@ -1,19 +1,11 @@
 import { useEffect, useState } from 'react';
-import { deriveKeys, generateSalt, type DerivedKeys, type VaultItemSecret } from '@app/crypto';
+import { deriveKeys, decryptVaultItem, generateSalt, type DerivedKeys } from '@app/crypto';
 
 import './App.css';
 import { LoginPage } from './pages/LoginPage';
 import { fetchMe, fetchVaultItems, fetchUserSalt, login, registerNewEmail } from './serverAPI';
 import { PasswordsPage } from './pages/PasswordsPage';
 import { RegisterPage } from './pages/RegisterPage';
-
-const testDecryptVaultItem = (_payload: string, _key: CryptoKey): Promise<VaultItemSecret> => {
-  return Promise.resolve({
-    siteName: 'Example Site',
-    username: 'jake',
-    password: '12345',
-  });
-};
 
 function App() {
   return (
@@ -67,7 +59,7 @@ function Routes() {
       return (
         <PasswordsPage
           fetchVaultItems={fetchVaultItems}
-          decryptVaultItem={testDecryptVaultItem}
+          decryptVaultItem={decryptVaultItem}
           encryptionKey={keys?.encryptionKey}
           fetchMe={fetchMe}
           redirect={redirect}
