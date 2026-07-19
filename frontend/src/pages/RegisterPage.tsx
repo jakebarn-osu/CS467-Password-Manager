@@ -1,122 +1,88 @@
-// Registration happens in two steps.
-// 1. The user submits their email address. If the address is valid and not already
-//    registered, the server creates an entry and generates a salt for that email.
-// 2. The user enters the desired master password, which is combined with the
-//    salt received from the server to generate the auth key.
-// 3. The auth key is submitted to the server so it can be hashed and stored
-//    an used for future authentication.
-// TODO: The server might need to return some sort of token as part of this process
-//  so a different user cannot set the password for a different user.
+// Registration happens in three steps.
+// 1. A user enters their email and chooses a master password.
+// 2. We generate a salt random salt and derive and auth key from the salt +
+//    master password.
+// 3a. We submit the salt, auth key, and email to the server. If the values are valid
+//    we redirect to the login page.
+// 3b. If the values are invalid (ie email already registered) we clear the
+//    the form values and display an error message instructing the user to try
+//    again.
+import type { RegisterResponse } from '@app/shared';
 import { useState } from 'react';
 import type { ServerResponse } from '../serverAPI';
+import type { DerivedKeys } from '@app/crypto';
 
 // registration they are redirected to the login page.
 export function RegisterPage({
-  generateAuthKey,
-  registerNewEmail,
-  setNewUserAuthKey,
+  generateSalt,
+  deriveKeys,
+  registerNewUser,
   redirect,
 }: {
-  generateAuthKey: (masterPassword: string, salt: string) => Promise<string>;
-  registerNewEmail: (email: string) => Promise<ServerResponse<string>>;
-  setNewUserAuthKey: (email: string, authKey: string) => Promise<ServerResponse<boolean>>;
+  generateSalt: () => Uint8Array;
+  deriveKeys: (masterPassword: string, salt: Uint8Array) => Promise<DerivedKeys>;
+  registerNewUser: (
+    email: string,
+    authKey: Uint8Array,
+    salt: Uint8Array,
+  ) => Promise<ServerResponse<RegisterResponse | null>>;
   redirect: (newPath: string) => void;
 }) {
   const [formEmail, setFormEmail] = useState('');
-  const [registerEmailError, setRegisterEmailError] = useState('');
-
-  const [userSalt, setUserSalt] = useState('');
   const [formPassword, setFormPassword] = useState('');
-  const [authKeyError, setAuthKeyError] = useState('');
+  const [registerError, setRegisterError] = useState('');
 
   const handleRegisterNewEmail = async (ev: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
     ev.preventDefault();
 
-    // TODO: add client side email validation
-    if (!formEmail) {
+    // TODO: add client side email and password validation
+    if (!formEmail || !formPassword) {
       return;
     }
 
     try {
-      const { data: salt, publicErrorMessage } = await registerNewEmail(formEmail);
+      const userSalt = generateSalt();
+      const { authKey } = await deriveKeys(formPassword, userSalt);
+      const { publicErrorMessage } = await registerNewUser(formEmail, authKey, userSalt);
       if (publicErrorMessage) {
-        setRegisterEmailError(publicErrorMessage);
-        return;
-      }
-
-      setUserSalt(salt);
-    } catch (e) {
-      console.error(e);
-      setRegisterEmailError('Error setting up your account.');
-    }
-  };
-
-  const handleGenerateAuthKeyAndRegister = async (
-    ev: React.MouseEvent<HTMLButtonElement, MouseEvent>,
-  ) => {
-    ev.preventDefault();
-
-    if (!userSalt) {
-      return;
-    }
-
-    try {
-      const key = await generateAuthKey(userSalt, formPassword);
-      const { data: success, publicErrorMessage } = await setNewUserAuthKey(formEmail, key);
-      if (!success) {
-        setAuthKeyError(publicErrorMessage);
+        setRegisterError(publicErrorMessage);
         return;
       }
 
       redirect('/login');
     } catch (e) {
       console.error(e);
-      setAuthKeyError('Error setting up your account.');
+      setRegisterError('Error setting up your account.');
     }
   };
 
   return (
     <div>
-      <h2>Register Page</h2>
+      <h2>Register a new account</h2>
 
-      {!userSalt ? (
-        <>
-          <h3>Register your Email Address</h3>
-          <form>
-            <input
-              type="text"
-              onInput={(ev) => {
-                setFormEmail(ev.currentTarget.value);
-              }}
-              value={formEmail}
-            />
-            <button onClick={handleRegisterNewEmail}>Submit</button>
-          </form>
+      <form>
+        <h3>Enter your email address</h3>
+        <input
+          type="text"
+          onInput={(ev) => {
+            setFormEmail(ev.currentTarget.value);
+          }}
+          value={formEmail}
+        />
 
-          {registerEmailError && (
-            <div>
-              <p>Error: {registerEmailError}</p>
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          <h3>Enter your new Master Password</h3>
-          <form>
-            <input
-              type="password"
-              onInput={(ev) => setFormPassword(ev.currentTarget.value)}
-              value={formPassword}
-            />
-            <button onClick={handleGenerateAuthKeyAndRegister}>Submit</button>
-          </form>
+        <h3>Enter your new Master Password</h3>
+        <input
+          type="password"
+          onInput={(ev) => setFormPassword(ev.currentTarget.value)}
+          value={formPassword}
+        />
+        <button onClick={handleRegisterNewEmail}>Submit</button>
+      </form>
 
-          {authKeyError && (
-            <div>
-              <p>Error: {authKeyError}</p>
-            </div>
-          )}
-        </>
+      {registerError && (
+        <div>
+          <p>Error: {registerError}</p>
+        </div>
       )}
     </div>
   );

@@ -4,11 +4,16 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { RegisterPage } from './RegisterPage';
 
+const SOME_SALT = new Uint8Array([1, 2, 3]);
+const SOME_AUTH_KEY = new Uint8Array([4, 5, 6]);
+
 function renderRegisterPage(overrides = {}) {
   const props = {
-    generateAuthKey: vi.fn().mockResolvedValue('some-auth-key'),
-    registerNewEmail: vi.fn().mockResolvedValue({ data: 'some-salt', publicErrorMessage: '' }),
-    setNewUserAuthKey: vi.fn().mockResolvedValue({ data: true, publicErrorMessage: '' }),
+    generateSalt: vi.fn().mockReturnValue(SOME_SALT),
+    deriveKeys: vi.fn().mockResolvedValue({ authKey: SOME_AUTH_KEY, encryptionKey: {} }),
+    registerNewUser: vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'some-id', email: 'user@example.com' }, publicErrorMessage: '' }),
     redirect: vi.fn(),
     ...overrides,
   };
@@ -17,95 +22,65 @@ function renderRegisterPage(overrides = {}) {
   return props;
 }
 
+function fillOutForm(email: string, password: string) {
+  fireEvent.input(screen.getByRole('textbox'), { target: { value: email } });
+  fireEvent.input(document.querySelector('input[type="password"]')!, {
+    target: { value: password },
+  });
+}
+
 describe('RegisterPage', () => {
-  it('renders the email step first', () => {
+  it('renders the registration form', () => {
     renderRegisterPage();
 
-    expect(screen.getByText('Register your Email Address')).toBeInTheDocument();
+    expect(screen.getByText('Enter your email address')).toBeInTheDocument();
+    expect(screen.getByText('Enter your new Master Password')).toBeInTheDocument();
   });
 
-  it('registers the email and advances to the password step on submit', async () => {
-    const props = renderRegisterPage();
-
-    fireEvent.input(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
-    fireEvent.click(screen.getByText('Submit'));
-
-    expect(await screen.findByText('Enter your new Master Password')).toBeInTheDocument();
-    expect(props.registerNewEmail).toHaveBeenCalledWith('user@example.com');
-  });
-
-  it('does not register when the email field is empty', () => {
+  it('does not register when the email or password field is empty', () => {
     const props = renderRegisterPage();
 
     fireEvent.click(screen.getByText('Submit'));
 
-    expect(props.registerNewEmail).not.toHaveBeenCalled();
-    expect(screen.getByText('Register your Email Address')).toBeInTheDocument();
+    expect(props.registerNewUser).not.toHaveBeenCalled();
   });
 
-  it('shows an error message when registering the email fails', async () => {
-    renderRegisterPage({
-      registerNewEmail: vi
-        .fn()
-        .mockResolvedValue({ data: '', publicErrorMessage: 'Email already registered.' }),
-    });
-
-    fireEvent.input(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
-    fireEvent.click(screen.getByText('Submit'));
-
-    expect(await screen.findByText('Error: Email already registered.')).toBeInTheDocument();
-    expect(screen.queryByText('Enter your new Master Password')).not.toBeInTheDocument();
-  });
-
-  it('generates an auth key and redirects after entering the master password', async () => {
+  it('generates a salt and auth key and registers the user on submit', async () => {
     const props = renderRegisterPage();
 
-    fireEvent.input(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
-    fireEvent.click(screen.getByText('Submit'));
-    await screen.findByText('Enter your new Master Password');
-
-    fireEvent.input(document.querySelector('input[type="password"]')!, {
-      target: { value: 'super-secret' },
-    });
+    fillOutForm('user@example.com', 'super-secret');
     fireEvent.click(screen.getByText('Submit'));
 
     await vi.waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
-    expect(props.generateAuthKey).toHaveBeenCalledWith('some-salt', 'super-secret');
-    expect(props.setNewUserAuthKey).toHaveBeenCalledWith('user@example.com', 'some-auth-key');
+    expect(props.generateSalt).toHaveBeenCalled();
+    expect(props.deriveKeys).toHaveBeenCalledWith('super-secret', SOME_SALT);
+    expect(props.registerNewUser).toHaveBeenCalledWith(
+      'user@example.com',
+      SOME_AUTH_KEY,
+      SOME_SALT,
+    );
   });
 
-  it('shows an error message when setting the auth key fails', async () => {
+  it('shows an error message when registering the user fails', async () => {
     const props = renderRegisterPage({
-      setNewUserAuthKey: vi
+      registerNewUser: vi
         .fn()
-        .mockResolvedValue({ data: false, publicErrorMessage: 'Error setting up your account.' }),
+        .mockResolvedValue({ data: null, publicErrorMessage: 'Email already registered.' }),
     });
 
-    fireEvent.input(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
-    fireEvent.click(screen.getByText('Submit'));
-    await screen.findByText('Enter your new Master Password');
-
-    fireEvent.input(document.querySelector('input[type="password"]')!, {
-      target: { value: 'super-secret' },
-    });
+    fillOutForm('user@example.com', 'super-secret');
     fireEvent.click(screen.getByText('Submit'));
 
-    expect(await screen.findByText('Error: Error setting up your account.')).toBeInTheDocument();
+    expect(await screen.findByText('Error: Email already registered.')).toBeInTheDocument();
     expect(props.redirect).not.toHaveBeenCalled();
   });
 
   it('shows a generic error message if registration throws', async () => {
     const props = renderRegisterPage({
-      generateAuthKey: vi.fn().mockRejectedValue(new Error('boom')),
+      deriveKeys: vi.fn().mockRejectedValue(new Error('boom')),
     });
 
-    fireEvent.input(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
-    fireEvent.click(screen.getByText('Submit'));
-    await screen.findByText('Enter your new Master Password');
-
-    fireEvent.input(document.querySelector('input[type="password"]')!, {
-      target: { value: 'super-secret' },
-    });
+    fillOutForm('user@example.com', 'super-secret');
     fireEvent.click(screen.getByText('Submit'));
 
     expect(await screen.findByText('Error: Error setting up your account.')).toBeInTheDocument();

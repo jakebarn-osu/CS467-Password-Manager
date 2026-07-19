@@ -5,11 +5,13 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY frontend/package.json ./frontend/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
-# Resolve fresh so the container gets its own platform native bundler binding
-RUN rm -f package-lock.json && npm install --workspace=frontend --workspace=@app/shared
+COPY packages/crypto/package.json ./packages/crypto/package.json
+
+RUN npm install --workspace=frontend --workspace=@app/shared --workspace=@app/crypto --workspace=@app/shared
 
 COPY frontend ./frontend
 COPY packages/shared ./packages/shared
+COPY packages/crypto ./packages/crypto
 
 WORKDIR /app/frontend
 
