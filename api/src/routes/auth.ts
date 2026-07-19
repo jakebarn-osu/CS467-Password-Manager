@@ -158,6 +158,9 @@ authRouter.post(
     if (!user) {
       throw new HttpError(401, "Unauthorized");
     }
+    if (user.mfa_enabled) {
+      throw new HttpError(409, "MFA is already enabled");
+    }
     // Enrollment stores the secret in a pending state and does not turn MFA on
     // until a code is verified.
     const secret = authenticator.generateSecret();
