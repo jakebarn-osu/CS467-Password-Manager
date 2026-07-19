@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import {
   deriveKeys,
   decryptVaultItem,
+  encryptVaultItem,
   generateSalt,
   type DerivedKeys,
-  type VaultItemSecret,
 } from '@app/crypto';
 
 import './App.css';
@@ -19,11 +19,6 @@ import {
 } from './serverAPI';
 import { PasswordsPage } from './pages/PasswordsPage';
 import { RegisterPage } from './pages/RegisterPage';
-
-// TODO: replace with crypto's encryptVaultItem once it's implemented (Phase 2).
-const testEncryptVaultItem = (_item: VaultItemSecret, _key: CryptoKey): Promise<string> => {
-  return Promise.resolve('ENCRYPTED-BLOB');
-};
 
 function App() {
   return (
@@ -78,7 +73,7 @@ function Routes() {
         <PasswordsPage
           fetchVaultItems={fetchVaultItems}
           decryptVaultItem={decryptVaultItem}
-          encryptVaultItem={testEncryptVaultItem}
+          encryptVaultItem={encryptVaultItem}
           createVaultItem={createVaultItem}
           encryptionKey={keys?.encryptionKey}
           fetchMe={fetchMe}
