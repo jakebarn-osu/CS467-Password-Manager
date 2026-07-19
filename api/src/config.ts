@@ -20,4 +20,7 @@ export const config = Object.freeze({
   SALT_PEPPER,
   JWT_EXPIRES_IN_SECONDS: parsePositiveInt(process.env.JWT_EXPIRES_IN_SECONDS, 900),
   PORT: parsePositiveInt(process.env.PORT, 5000),
+  FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN ?? "http://localhost:5173",
+  AUTH_RATE_LIMIT_WINDOW_MS: parsePositiveInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 900000),
+  AUTH_RATE_LIMIT_MAX: parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 100),
 });
