@@ -47,6 +47,10 @@ export interface CreateVaultItemRequest {
   encryptedData: string;
 }
 
+export interface UpdateVaultItemRequest {
+  encryptedData: string;
+}
+
 export interface VaultItemListResponse {
   items: VaultItem[];
 }

@@ -6,8 +6,10 @@ import { validate } from "../middleware/validate.js";
 import { requireAuth } from "../middleware/require-auth.js";
 import {
   createVaultItem,
+  deleteVaultItem,
   findVaultItemById,
   listVaultItems,
+  updateVaultItem,
 } from "../repositories/vault-items.js";
 import type { VaultItemRecord } from "../repositories/vault-items.js";
 
@@ -62,5 +64,34 @@ vaultRouter.get(
       throw new HttpError(404, "Not found");
     }
     res.status(200).json(toVaultItem(item));
+  }),
+);
+
+vaultRouter.patch(
+  "/items/:id",
+  requireAuth,
+  validate({ params: paramsSchema, body: createSchema }),
+  asyncHandler(async (req, res) => {
+    const { encryptedData } = req.body as z.infer<typeof createSchema>;
+    // A missing or non-owned id comes back null so we answer 404 and never leak existence.
+    const row = await updateVaultItem(req.auth!.userId, req.params.id, encryptedData);
+    if (!row) {
+      throw new HttpError(404, "Not found");
+    }
+    res.status(200).json(toVaultItem(row));
+  }),
+);
+
+vaultRouter.delete(
+  "/items/:id",
+  requireAuth,
+  validate({ params: paramsSchema }),
+  asyncHandler(async (req, res) => {
+    // A missing or non-owned id deletes nothing so we answer 404 and never leak existence.
+    const removed = await deleteVaultItem(req.auth!.userId, req.params.id);
+    if (!removed) {
+      throw new HttpError(404, "Not found");
+    }
+    res.status(204).end();
   }),
 );
