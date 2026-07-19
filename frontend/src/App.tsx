@@ -1,9 +1,22 @@
 import { useEffect, useState } from 'react';
-import { deriveKeys, decryptVaultItem, generateSalt, type DerivedKeys } from '@app/crypto';
+import {
+  deriveKeys,
+  decryptVaultItem,
+  encryptVaultItem,
+  generateSalt,
+  type DerivedKeys,
+} from '@app/crypto';
 
 import './App.css';
 import { LoginPage } from './pages/LoginPage';
-import { fetchMe, fetchVaultItems, fetchUserSalt, login, registerNewEmail } from './serverAPI';
+import {
+  createVaultItem,
+  fetchMe,
+  fetchVaultItems,
+  fetchUserSalt,
+  login,
+  registerNewEmail,
+} from './serverAPI';
 import { PasswordsPage } from './pages/PasswordsPage';
 import { RegisterPage } from './pages/RegisterPage';
 
@@ -60,6 +73,8 @@ function Routes() {
         <PasswordsPage
           fetchVaultItems={fetchVaultItems}
           decryptVaultItem={decryptVaultItem}
+          encryptVaultItem={encryptVaultItem}
+          createVaultItem={createVaultItem}
           encryptionKey={keys?.encryptionKey}
           fetchMe={fetchMe}
           redirect={redirect}

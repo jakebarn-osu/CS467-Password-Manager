@@ -1,4 +1,5 @@
 import {
+  type CreateVaultItemRequest,
   type LoginRequest,
   type LoginResponse,
   type MeResponse,
@@ -278,6 +279,63 @@ export async function fetchVaultItems(): Promise<ServerResponse<VaultItem[] | nu
     return {
       data: null,
       publicErrorMessage: DEFAULT_VAULT_ITEMS_ERROR,
+    };
+  }
+}
+
+const DEFAULT_CREATE_VAULT_ITEM_ERROR = 'Error saving password.';
+
+export async function createVaultItem(
+  encryptedData: string,
+): Promise<ServerResponse<VaultItem | null>> {
+  const url = '/api/v1/vault/items';
+
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_CREATE_VAULT_ITEM_ERROR,
+    };
+  }
+
+  const body: CreateVaultItemRequest = { encryptedData };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      console.error(response);
+      return {
+        data: null,
+        publicErrorMessage: DEFAULT_CREATE_VAULT_ITEM_ERROR,
+      };
+    }
+
+    const responseBody: VaultItem = await response.json();
+    if (!responseBody.id || !responseBody.encryptedData) {
+      console.error('Invalid response: ', response);
+      return {
+        data: null,
+        publicErrorMessage: DEFAULT_CREATE_VAULT_ITEM_ERROR,
+      };
+    }
+
+    return {
+      data: responseBody,
+      publicErrorMessage: '',
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_CREATE_VAULT_ITEM_ERROR,
     };
   }
 }
