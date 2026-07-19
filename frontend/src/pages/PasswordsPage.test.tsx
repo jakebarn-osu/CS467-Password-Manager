@@ -4,10 +4,17 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { PasswordsPage } from './PasswordsPage';
 
+const STUB_KEY = {} as CryptoKey;
+
 function renderPasswordsPage(overrides = {}) {
   const props = {
-    fetchPasswords: vi.fn().mockResolvedValue({ data: [], publicErrorMessage: '' }),
-    decryptPasswords: vi.fn().mockResolvedValue([]),
+    fetchVaultItems: vi.fn().mockResolvedValue({ data: [], publicErrorMessage: '' }),
+    decryptVaultItem: vi.fn(),
+    encryptionKey: STUB_KEY,
+    fetchMe: vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'user-1', email: 'user@example.com', mfaEnabled: false }, publicErrorMessage: '' }),
+    redirect: vi.fn(),
     ...overrides,
   };
 
@@ -20,48 +27,105 @@ describe('PasswordsPage', () => {
     const props = renderPasswordsPage();
 
     expect(screen.getByText('Passwords')).toBeInTheDocument();
-    await waitFor(() => expect(props.decryptPasswords).toHaveBeenCalled());
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
   });
 
-  it('calls fetchPasswords and decryptPasswords on mount', async () => {
+  it('calls fetchVaultItems on mount', async () => {
     const props = renderPasswordsPage();
 
-    await waitFor(() => expect(props.decryptPasswords).toHaveBeenCalledWith([]));
-    expect(props.fetchPasswords).toHaveBeenCalled();
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+    expect(props.decryptVaultItem).not.toHaveBeenCalled();
+  });
+
+  it('shows a no passwords message when there are no passwords', async () => {
+    renderPasswordsPage();
+
+    expect(await screen.findByText('No passwords found.')).toBeInTheDocument();
   });
 
   it('renders decrypted passwords once loaded', async () => {
     renderPasswordsPage({
-      fetchPasswords: vi.fn().mockResolvedValue({
-        data: [{ itemName: 'Email', username: 'someone', password: 'encrypted' }],
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [{ id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' }],
         publicErrorMessage: '',
       }),
-      decryptPasswords: vi
+      decryptVaultItem: vi
         .fn()
-        .mockResolvedValue([{ itemName: 'Email', username: 'someone', password: 'plaintext' }]),
+        .mockResolvedValue({ siteName: 'Email', username: 'someone', password: 'plaintext' }),
     });
 
     expect(await screen.findByText('Email')).toBeInTheDocument();
     expect(screen.getByText('Username: someone')).toBeInTheDocument();
     expect(screen.getByText('Password: plaintext')).toBeInTheDocument();
+    expect(screen.queryByText('No passwords found.')).not.toBeInTheDocument();
   });
 
-  it('shows an error message when fetching passwords fails', async () => {
-    const decryptPasswords = vi.fn();
+  it('shows an error message when fetching vault items fails', async () => {
+    const decryptVaultItem = vi.fn();
     renderPasswordsPage({
-      fetchPasswords: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: 'Error fetching passwords.' }),
-      decryptPasswords,
+      fetchVaultItems: vi
+        .fn()
+        .mockResolvedValue({ data: null, publicErrorMessage: 'Error fetching passwords.' }),
+      decryptVaultItem,
     });
 
     expect(await screen.findByText('Error: Error fetching passwords.')).toBeInTheDocument();
-    expect(decryptPasswords).not.toHaveBeenCalled();
+    expect(decryptVaultItem).not.toHaveBeenCalled();
+    expect(screen.queryByText('No passwords found.')).not.toBeInTheDocument();
   });
 
-  it('shows an error message when decrypting passwords fails', async () => {
+  it('shows an error message when decrypting a vault item fails', async () => {
     renderPasswordsPage({
-      decryptPasswords: vi.fn().mockRejectedValue(new Error('boom')),
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [{ id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' }],
+        publicErrorMessage: '',
+      }),
+      decryptVaultItem: vi.fn().mockRejectedValue(new Error('boom')),
     });
 
     expect(await screen.findByText('Error: Unable to load your passwords.')).toBeInTheDocument();
+  });
+
+  it('shows who is logged in when an auth token is present', async () => {
+    renderPasswordsPage();
+
+    expect(await screen.findByText('Logged in as user@example.com')).toBeInTheDocument();
+  });
+
+  it('does not show a logged in message when there is no auth token', async () => {
+    renderPasswordsPage({
+      fetchMe: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: 'Error fetching account details.' }),
+    });
+
+    await waitFor(() => expect(screen.queryByText(/Logged in as/)).not.toBeInTheDocument());
+  });
+
+  it('redirects to login when there is no auth token', async () => {
+    const props = renderPasswordsPage({
+      fetchMe: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: 'Error fetching account details.' }),
+    });
+
+    await waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
+  });
+
+  it('redirects to login when there is no encryption key', async () => {
+    const props = renderPasswordsPage({ encryptionKey: undefined });
+
+    await waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
+  });
+
+  it('does not fetch or decrypt vault items when redirecting to login', async () => {
+    const props = renderPasswordsPage({ encryptionKey: undefined });
+
+    await waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
+    expect(props.fetchVaultItems).not.toHaveBeenCalled();
+    expect(props.decryptVaultItem).not.toHaveBeenCalled();
+  });
+
+  it('does not redirect when both the user and encryption key are present', async () => {
+    const props = renderPasswordsPage();
+
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+    expect(props.redirect).not.toHaveBeenCalled();
   });
 });
