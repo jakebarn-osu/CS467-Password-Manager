@@ -1,5 +1,11 @@
+import {
+  type LoginRequest,
+  type LoginResponse,
+  type RegisterRequest,
+  type RegisterResponse,
+  type SaltResponse,
+} from '@app/shared';
 import { bytesToBase64 } from '@app/crypto';
-import { type RegisterRequest, type RegisterResponse } from '@app/shared';
 
 export type ServerResponse<T> = {
   data: T;
@@ -8,19 +14,24 @@ export type ServerResponse<T> = {
 
 const DEFAULT_SERVER_ERROR = 'Unable to reach the server. Please try again later.';
 
-type UserSalt = string;
+const DEFAULT_LOGIN_ERROR = 'Error logging in.';
 
-export async function fetchUserSalt(email: string): Promise<ServerResponse<UserSalt>> {
-  const url = `/salt?email=${email}`;
+export async function fetchUserSalt(email: string): Promise<ServerResponse<SaltResponse | null>> {
+  const url = `/api/v1/auth/salt?email=${encodeURIComponent(email)}`;
 
   try {
     const response = await fetch(url);
 
     if (!response.ok) {
-      console.error(response);
+      let publicMessage = DEFAULT_LOGIN_ERROR;
+
+      if (response.status >= 500 && response.status < 600) {
+        publicMessage = DEFAULT_SERVER_ERROR;
+      }
+
       return {
-        data: '',
-        publicErrorMessage: 'Error logging in.',
+        data: null,
+        publicErrorMessage: publicMessage,
       };
     }
 
@@ -28,20 +39,20 @@ export async function fetchUserSalt(email: string): Promise<ServerResponse<UserS
     if (!responseBody.salt) {
       console.error(response);
       return {
-        data: '',
-        publicErrorMessage: 'Error logging in.',
+        data: null,
+        publicErrorMessage: DEFAULT_LOGIN_ERROR,
       };
     }
 
     return {
-      data: responseBody.salt,
+      data: responseBody,
       publicErrorMessage: '',
     };
   } catch (error) {
     console.error(error);
     return {
-      data: '',
-      publicErrorMessage: 'Error logging in.',
+      data: null,
+      publicErrorMessage: DEFAULT_LOGIN_ERROR,
     };
   }
 }
@@ -77,8 +88,9 @@ export async function registerNewEmail(
 
       if (response.status == 409) {
         publicMessage = 'This email address is already registered.';
-      } else if (response.status >= 500 && response.status < 600)
+      } else if (response.status >= 500 && response.status < 600) {
         publicMessage = DEFAULT_SERVER_ERROR;
+      }
 
       return {
         data: null,
@@ -108,8 +120,16 @@ export async function registerNewEmail(
   }
 }
 
-export async function login(authKey: string): Promise<ServerResponse<boolean>> {
-  const url = '/login';
+export async function login(
+  email: string,
+  authKey: string,
+): Promise<ServerResponse<LoginResponse | null>> {
+  const url = '/api/v1/auth/login';
+
+  const body: LoginRequest = {
+    email,
+    authKey,
+  };
 
   try {
     const response = await fetch(url, {
@@ -117,26 +137,40 @@ export async function login(authKey: string): Promise<ServerResponse<boolean>> {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ authKey }),
+      body: JSON.stringify(body),
     });
 
-    if (!response.ok || !response.headers.get('Set-Cookie')) {
-      console.error(response);
+    if (!response.ok) {
+      let publicMessage = DEFAULT_LOGIN_ERROR;
+
+      if (response.status >= 500 && response.status < 600) {
+        publicMessage = DEFAULT_SERVER_ERROR;
+      }
+
       return {
-        data: false,
-        publicErrorMessage: 'Error logging in.',
+        data: null,
+        publicErrorMessage: publicMessage,
+      };
+    }
+
+    const responseJson = await response.json();
+    if (!responseJson.token) {
+      console.error('Invalid response: ', response);
+      return {
+        data: null,
+        publicErrorMessage: DEFAULT_LOGIN_ERROR,
       };
     }
 
     return {
-      data: true,
+      data: responseJson,
       publicErrorMessage: '',
     };
   } catch (error) {
     console.error(error);
     return {
-      data: false,
-      publicErrorMessage: 'Error logging in.',
+      data: null,
+      publicErrorMessage: DEFAULT_LOGIN_ERROR,
     };
   }
 }
@@ -150,8 +184,22 @@ export type EncryptedPassword = {
 export async function fetchPasswords(): Promise<ServerResponse<EncryptedPassword[] | null>> {
   const url = `/passwords`;
 
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    return {
+      data: null,
+      publicErrorMessage: 'Error fetching passwords.',
+    };
+  }
+
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
     if (!response.ok) {
       console.error(response);

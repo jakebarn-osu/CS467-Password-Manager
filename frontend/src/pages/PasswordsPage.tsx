@@ -55,7 +55,7 @@ export function PasswordsPage({
         {passwords && !passwordsError ? (
           passwords.map((p) => {
             return (
-              <div className="password-item">
+              <div className="password-item" key={p.itemName}>
                 <h5>{p.itemName}</h5>
                 <p>Username: {p.username}</p>
                 <p>Password: {p.password}</p>
