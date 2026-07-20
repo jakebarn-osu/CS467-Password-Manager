@@ -72,7 +72,8 @@ describe('PasswordsPage', () => {
 
     expect(await screen.findByText('Email')).toBeInTheDocument();
     expect(screen.getByText('Username: someone')).toBeInTheDocument();
-    expect(screen.getByText('Password: plaintext')).toBeInTheDocument();
+    expect(screen.getByText(/Password:/)).toBeInTheDocument();
+    expect(screen.queryByText(/plaintext/)).not.toBeInTheDocument();
     expect(screen.queryByText('No passwords found.')).not.toBeInTheDocument();
   });
 

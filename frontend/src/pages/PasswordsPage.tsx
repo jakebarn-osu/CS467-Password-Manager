@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ServerResponse } from '../serverAPI';
 import type { MeResponse, VaultItem } from '@app/shared';
 import type { VaultItemSecret } from '@app/crypto';
+import { PasswordItem } from '../components/PasswordItem';
 
 export type Password = VaultItemSecret;
 
@@ -162,15 +163,7 @@ export function PasswordsPage({
         {passwords &&
           !passwordsError &&
           passwords.length > 0 &&
-          passwords.map((p, i) => {
-            return (
-              <div className="password-item" key={i}>
-                <h5>{p.siteName}</h5>
-                <p>Username: {p.username}</p>
-                <p>Password: {p.password}</p>
-              </div>
-            );
-          })}
+          passwords.map((p, i) => <PasswordItem password={p} key={i} />)}
       </section>
 
       {passwords && !passwordsError && passwords.length === 0 && <div>No passwords found.</div>}
