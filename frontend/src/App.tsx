@@ -1,32 +1,24 @@
-import { useState } from 'react';
-import { deriveKeys, generateSalt } from '@app/crypto';
+import { useEffect, useState } from 'react';
+import {
+  deriveKeys,
+  decryptVaultItem,
+  encryptVaultItem,
+  generateSalt,
+  type DerivedKeys,
+} from '@app/crypto';
 
 import './App.css';
 import { LoginPage } from './pages/LoginPage';
 import {
-  fetchPasswords,
+  createVaultItem,
+  fetchMe,
+  fetchVaultItems,
   fetchUserSalt,
   login,
   registerNewEmail,
-  type EncryptedPassword,
 } from './serverAPI';
-import { PasswordsPage, type Password } from './pages/PasswordsPage';
+import { PasswordsPage } from './pages/PasswordsPage';
 import { RegisterPage } from './pages/RegisterPage';
-
-const testDecryptPasswords = (_pws: EncryptedPassword[]): Promise<Password[]> => {
-  return Promise.resolve([
-    {
-      itemName: 'PW1',
-      username: 'jake',
-      password: '12345',
-    },
-    {
-      itemName: 'PW2',
-      username: 'jake',
-      password: '54321',
-    },
-  ]);
-};
 
 function App() {
   return (
@@ -38,10 +30,23 @@ function App() {
 
 function Routes() {
   const [path, setPath] = useState(window.location.pathname);
+  const [keys, setKeys] = useState<DerivedKeys | null>();
 
   const redirect = (newPath: string) => {
-    window.location.pathname = newPath;
+    window.history.pushState(null, '', newPath);
     setPath(newPath);
+  };
+
+  useEffect(() => {
+    const handlePopState = () => setPath(window.location.pathname);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleDeriveKeys = async (password: string, salt: Uint8Array): Promise<DerivedKeys> => {
+    const derived = await deriveKeys(password, salt);
+    setKeys(derived);
+    return derived;
   };
 
   switch (path) {
@@ -49,7 +54,7 @@ function Routes() {
       return (
         <LoginPage
           fetchUserSalt={fetchUserSalt}
-          deriveKeys={deriveKeys}
+          deriveKeys={handleDeriveKeys}
           login={login}
           redirect={redirect}
         />
@@ -65,7 +70,15 @@ function Routes() {
       );
     case '/passwords':
       return (
-        <PasswordsPage fetchPasswords={fetchPasswords} decryptPasswords={testDecryptPasswords} />
+        <PasswordsPage
+          fetchVaultItems={fetchVaultItems}
+          decryptVaultItem={decryptVaultItem}
+          encryptVaultItem={encryptVaultItem}
+          createVaultItem={createVaultItem}
+          encryptionKey={keys?.encryptionKey}
+          fetchMe={fetchMe}
+          redirect={redirect}
+        />
       );
     default:
       return <PageNotFound />;

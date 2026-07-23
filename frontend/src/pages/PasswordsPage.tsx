@@ -1,42 +1,149 @@
 import { useEffect, useState } from 'react';
-import type { EncryptedPassword, ServerResponse } from '../serverAPI';
+import type { ServerResponse } from '../serverAPI';
+import type { MeResponse, VaultItem } from '@app/shared';
+import type { VaultItemSecret } from '@app/crypto';
+import { PasswordItem } from '../components/PasswordItem';
 
-export type Password = {
-  itemName: string;
-  username: string;
-  password: string;
-};
+export type Password = VaultItemSecret;
+
+function CreatePasswordForm({
+  encryptVaultItem,
+  createVaultItem,
+  encryptionKey,
+  onSaved,
+}: {
+  encryptVaultItem: (item: VaultItemSecret, key: CryptoKey) => Promise<string>;
+  createVaultItem: (encryptedData: string) => Promise<ServerResponse<VaultItem | null>>;
+  encryptionKey: CryptoKey | undefined;
+  onSaved: () => Promise<void>;
+}) {
+  const [formSiteName, setFormSiteName] = useState('');
+  const [formUsername, setFormUsername] = useState('');
+  const [formPassword, setFormPassword] = useState('');
+  const [createError, setCreateError] = useState('');
+
+  const handleCreatePassword = async (ev: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+    ev.preventDefault();
+
+    if (!formSiteName || !formUsername || !formPassword || !encryptionKey) {
+      return;
+    }
+
+    setCreateError('');
+
+    try {
+      const encryptedData = await encryptVaultItem(
+        { siteName: formSiteName, username: formUsername, password: formPassword },
+        encryptionKey,
+      );
+      const { publicErrorMessage } = await createVaultItem(encryptedData);
+      if (publicErrorMessage) {
+        setCreateError(publicErrorMessage);
+        return;
+      }
+
+      setFormSiteName('');
+      setFormUsername('');
+      setFormPassword('');
+      await onSaved();
+    } catch (e) {
+      console.error(e);
+      setCreateError('Error saving password.');
+    }
+  };
+
+  return (
+    <section>
+      <h3>Create New Password Entry</h3>
+      <form>
+        <input
+          type="text"
+          placeholder="Site name"
+          onInput={(ev) => setFormSiteName(ev.currentTarget.value)}
+          value={formSiteName}
+        />
+        <input
+          type="text"
+          placeholder="Username"
+          onInput={(ev) => setFormUsername(ev.currentTarget.value)}
+          value={formUsername}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          onInput={(ev) => setFormPassword(ev.currentTarget.value)}
+          value={formPassword}
+        />
+        <button onClick={handleCreatePassword}>Save</button>
+      </form>
+
+      {createError && (
+        <div>
+          <p>Error: {createError}</p>
+        </div>
+      )}
+    </section>
+  );
+}
 
 export function PasswordsPage({
-  fetchPasswords,
-  decryptPasswords,
+  fetchVaultItems,
+  decryptVaultItem,
+  encryptVaultItem,
+  createVaultItem,
+  encryptionKey,
+  fetchMe,
+  redirect,
 }: {
-  fetchPasswords: () => Promise<ServerResponse<EncryptedPassword[] | null>>;
-  decryptPasswords: (encrypted: EncryptedPassword[]) => Promise<Password[]>;
+  fetchVaultItems: () => Promise<ServerResponse<VaultItem[] | null>>;
+  decryptVaultItem: (payload: string, key: CryptoKey) => Promise<VaultItemSecret>;
+  encryptVaultItem: (item: VaultItemSecret, key: CryptoKey) => Promise<string>;
+  createVaultItem: (encryptedData: string) => Promise<ServerResponse<VaultItem | null>>;
+  encryptionKey: CryptoKey | undefined;
+  fetchMe: () => Promise<ServerResponse<MeResponse | null>>;
+  redirect: (route: string) => void;
 }) {
   const [passwords, setPasswords] = useState<Password[] | null>(null);
   const [passwordsError, setPasswordsError] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+
+  const loadPasswords = async (key: CryptoKey) => {
+    const response = await fetchVaultItems();
+    if (response.publicErrorMessage) {
+      setPasswordsError(response.publicErrorMessage);
+      return;
+    }
+
+    const vaultItems = response.data;
+    if (!vaultItems) {
+      setPasswordsError('Error fetching passwords');
+      return;
+    }
+
+    try {
+      const passwords = await Promise.all(
+        vaultItems.map(async (item) => ({
+          ...(await decryptVaultItem(item.encryptedData, key)),
+        })),
+      );
+      setPasswords(passwords);
+    } catch {
+      setPasswordsError('Unable to load your passwords.');
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
-      const response = await fetchPasswords();
-      if (response.publicErrorMessage) {
-        setPasswordsError(response.publicErrorMessage);
+      const { data } = await fetchMe();
+      const email = data?.email ?? '';
+      setUserEmail(email);
+
+      if (!email || !encryptionKey) {
+        redirect('/login');
         return;
       }
 
-      const encryptedPasswords = response.data;
-      if (!response.data) {
-        setPasswordsError('Error fetching passwords');
-        return;
-      }
-
-      try {
-        const passwords = await decryptPasswords(encryptedPasswords ?? []);
-        setPasswords(passwords);
-      } catch {
-        setPasswordsError('Unable to load your passwords.');
-      }
+      await loadPasswords(encryptionKey);
     };
 
     fetchData();
@@ -45,6 +152,7 @@ export function PasswordsPage({
   return (
     <div>
       <h2>Passwords</h2>
+      {userEmail && <p>Logged in as {userEmail}</p>}
       <section className="basic-flex">
         {passwordsError && (
           <section>
@@ -52,23 +160,24 @@ export function PasswordsPage({
           </section>
         )}
 
-        {passwords && !passwordsError ? (
-          passwords.map((p) => {
-            return (
-              <div className="password-item" key={p.itemName}>
-                <h5>{p.itemName}</h5>
-                <p>Username: {p.username}</p>
-                <p>Password: {p.password}</p>
-              </div>
-            );
-          })
-        ) : (
-          <div>No passwords found.</div>
-        )}
+        {passwords &&
+          !passwordsError &&
+          passwords.length > 0 &&
+          passwords.map((p, i) => <PasswordItem password={p} key={i} />)}
       </section>
 
-      <section>Create New Password Entry:</section>
-      {/* TODO new password form. */}
+      {passwords && !passwordsError && passwords.length === 0 && <div>No passwords found.</div>}
+
+      <CreatePasswordForm
+        encryptVaultItem={encryptVaultItem}
+        createVaultItem={createVaultItem}
+        encryptionKey={encryptionKey}
+        onSaved={async () => {
+          if (encryptionKey) {
+            await loadPasswords(encryptionKey);
+          }
+        }}
+      />
     </div>
   );
 }
