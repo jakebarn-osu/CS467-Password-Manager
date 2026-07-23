@@ -42,6 +42,10 @@ const saltQuerySchema = z.object({
 
 const MFA_ISSUER = "Secure Password Manager";
 
+// Accept the adjacent 30s TOTP steps so minor client clock drift near a step
+// boundary does not cause spurious rejections on an otherwise-correct code.
+authenticator.options = { window: 1 };
+
 const totpCodeSchema = z.string().trim().regex(/^\d{6}$/);
 
 const mfaActivateSchema = z.object({
@@ -88,7 +92,10 @@ authRouter.get(
 const loginSchema = z.object({
   email: emailSchema,
   authKey: z.string().min(1).max(1024),
-  code: totpCodeSchema.optional(),
+  // Any provided code is accepted by the schema and validated by verifying it
+  // against the secret, so a malformed code fails as invalid_mfa_code (401)
+  // rather than a schema error (400), keeping every bad-code case uniform.
+  code: z.string().trim().max(64).optional(),
 });
 
 authRouter.post(
