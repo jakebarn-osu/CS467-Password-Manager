@@ -1,10 +1,13 @@
 import { createHmac } from "node:crypto";
 import { Router } from "express";
 import argon2 from "argon2";
+import { authenticator } from "otplib";
 import { z } from "zod";
 import type {
   LoginResponse,
   MeResponse,
+  MfaEnrollResponse,
+  MfaStatusResponse,
   RegisterResponse,
   SaltResponse,
 } from "@app/shared";
@@ -16,8 +19,11 @@ import { signAccessToken } from "../lib/jwt.js";
 import { block } from "../lib/token-blocklist.js";
 import {
   createUser,
+  disableMfa,
+  enableMfa,
   findUserByEmail,
   findUserById,
+  setTotpSecret,
 } from "../repositories/users.js";
 
 export const authRouter = Router();
@@ -32,6 +38,22 @@ const registerSchema = z.object({
 
 const saltQuerySchema = z.object({
   email: emailSchema,
+});
+
+const MFA_ISSUER = "Secure Password Manager";
+
+// Accept the adjacent 30s TOTP steps so minor client clock drift near a step
+// boundary does not cause spurious rejections on an otherwise-correct code.
+authenticator.options = { window: 1 };
+
+const totpCodeSchema = z.string().trim().regex(/^\d{6}$/);
+
+const mfaActivateSchema = z.object({
+  code: totpCodeSchema,
+});
+
+const mfaDisableSchema = z.object({
+  code: totpCodeSchema,
 });
 
 authRouter.post(
@@ -70,21 +92,35 @@ authRouter.get(
 const loginSchema = z.object({
   email: emailSchema,
   authKey: z.string().min(1).max(1024),
+  // Any provided code is accepted by the schema and validated by verifying it
+  // against the secret, so a malformed code fails as invalid_mfa_code (401)
+  // rather than a schema error (400), keeping every bad-code case uniform.
+  code: z.string().trim().max(64).optional(),
 });
 
 authRouter.post(
   "/login",
   validate({ body: loginSchema }),
   asyncHandler(async (req, res) => {
-    const { email, authKey } = req.body as z.infer<typeof loginSchema>;
+    const { email, authKey, code } = req.body as z.infer<typeof loginSchema>;
     const user = await findUserByEmail(email);
     // One uniform error for unknown email and wrong key so login is not an oracle.
     if (!user || !(await argon2.verify(user.auth_hash, authKey))) {
       throw new HttpError(401, "Invalid credentials");
     }
-    // When a stored TOTP secret is present a valid code will be required before
-    // a token is issued; no enrollment path exists yet, so a token is always
-    // issued here.
+    // The MFA check runs only after the password is proven, so asking for a code
+    // never reveals whether an account exists to an unauthenticated caller.
+    if (user.mfa_enabled) {
+      if (!code) {
+        throw new HttpError(401, "mfa_required");
+      }
+      if (
+        !user.totp_secret ||
+        !authenticator.verify({ token: code, secret: user.totp_secret })
+      ) {
+        throw new HttpError(401, "invalid_mfa_code");
+      }
+    }
     const token = signAccessToken(user.id);
     const body: LoginResponse = {
       token,
@@ -106,7 +142,7 @@ authRouter.get(
     const body: MeResponse = {
       id: user.id,
       email: user.email,
-      mfaEnabled: user.totp_secret !== null,
+      mfaEnabled: user.mfa_enabled,
     };
     res.status(200).json(body);
   }),
@@ -118,6 +154,73 @@ authRouter.post(
   asyncHandler(async (req, res) => {
     block(req.auth!.jti, req.auth!.exp);
     res.status(204).end();
+  }),
+);
+
+authRouter.post(
+  "/mfa/enroll",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await findUserById(req.auth!.userId);
+    if (!user) {
+      throw new HttpError(401, "Unauthorized");
+    }
+    if (user.mfa_enabled) {
+      throw new HttpError(409, "MFA is already enabled");
+    }
+    // Enrollment stores the secret in a pending state and does not turn MFA on
+    // until a code is verified.
+    const secret = authenticator.generateSecret();
+    await setTotpSecret(user.id, secret);
+    const otpauthUri = authenticator.keyuri(user.email, MFA_ISSUER, secret);
+    const body: MfaEnrollResponse = { secret, otpauthUri };
+    res.status(200).json(body);
+  }),
+);
+
+authRouter.post(
+  "/mfa/activate",
+  requireAuth,
+  validate({ body: mfaActivateSchema }),
+  asyncHandler(async (req, res) => {
+    const { code } = req.body as z.infer<typeof mfaActivateSchema>;
+    const user = await findUserById(req.auth!.userId);
+    if (!user) {
+      throw new HttpError(401, "Unauthorized");
+    }
+    if (!user.totp_secret) {
+      throw new HttpError(400, "No pending enrollment");
+    }
+    if (!authenticator.verify({ token: code, secret: user.totp_secret })) {
+      throw new HttpError(401, "invalid_mfa_code");
+    }
+    await enableMfa(user.id);
+    const body: MfaStatusResponse = { mfaEnabled: true };
+    res.status(200).json(body);
+  }),
+);
+
+authRouter.delete(
+  "/mfa",
+  requireAuth,
+  validate({ body: mfaDisableSchema }),
+  asyncHandler(async (req, res) => {
+    const { code } = req.body as z.infer<typeof mfaDisableSchema>;
+    const user = await findUserById(req.auth!.userId);
+    if (!user) {
+      throw new HttpError(401, "Unauthorized");
+    }
+    if (!user.mfa_enabled || !user.totp_secret) {
+      throw new HttpError(400, "MFA is not enabled");
+    }
+    // Disabling requires proving a current code so a stolen session cannot turn
+    // MFA off on its own.
+    if (!authenticator.verify({ token: code, secret: user.totp_secret })) {
+      throw new HttpError(401, "invalid_mfa_code");
+    }
+    await disableMfa(user.id);
+    const body: MfaStatusResponse = { mfaEnabled: false };
+    res.status(200).json(body);
   }),
 );
 

@@ -22,6 +22,7 @@ export interface SaltResponse {
 export interface LoginRequest {
   email: string;
   authKey: string;
+  code?: string;
 }
 
 export interface LoginResponse {
@@ -47,6 +48,27 @@ export interface CreateVaultItemRequest {
   encryptedData: string;
 }
 
+export interface UpdateVaultItemRequest {
+  encryptedData: string;
+}
+
 export interface VaultItemListResponse {
   items: VaultItem[];
+}
+
+export interface MfaEnrollResponse {
+  secret: string;
+  otpauthUri: string;
+}
+
+export interface MfaActivateRequest {
+  code: string;
+}
+
+export interface MfaDisableRequest {
+  code: string;
+}
+
+export interface MfaStatusResponse {
+  mfaEnabled: boolean;
 }

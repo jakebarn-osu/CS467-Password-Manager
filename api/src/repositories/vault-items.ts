@@ -38,3 +38,23 @@ export async function createVaultItem(input: {
   );
   return result.rows[0];
 }
+
+export async function updateVaultItem(
+  userId: string,
+  id: string,
+  encryptedData: string,
+): Promise<VaultItemRecord | null> {
+  const result = await pool.query<VaultItemRecord>(
+    "UPDATE vault_items SET encrypted_data = $3, updated_at = now() WHERE user_id = $1 AND id = $2 RETURNING id, user_id, encrypted_data, created_at, updated_at",
+    [userId, id, encryptedData],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function deleteVaultItem(userId: string, id: string): Promise<boolean> {
+  const result = await pool.query(
+    "DELETE FROM vault_items WHERE user_id = $1 AND id = $2",
+    [userId, id],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
